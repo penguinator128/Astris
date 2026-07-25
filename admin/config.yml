@@ -1,0 +1,40 @@
+backend:
+  name: github
+  repo: penguinator128/Astris
+  branch: main
+  base_url: https://astris1.vercel.app
+
+media_folder: "images/uploads"
+public_folder: "/images/uploads"
+
+collections:
+  - name: "photos"
+    label: "Photos"
+    folder: "content/photos"
+    create: true
+    fields:
+      - {label: "Title", name: "title", widget: "string"}
+      - {label: "Photo", name: "image", widget: "image"}
+      - {label: "Caption", name: "caption", widget: "text"}
+      - {label: "Project", name: "project", widget: "string"}
+      - {label: "Date", name: "date", widget: "datetime"}
+  - name: "videos"
+    label: "Videos"
+    folder: "content/videos"
+    create: true
+    fields:
+      - {label: "Title", name: "title", widget: "string"}
+      - {label: "Video File", name: "video", widget: "file"}
+      - {label: "Length", name: "length", widget: "string", required: false}
+      - {label: "Type", name: "type", widget: "string", required: false}
+      - {label: "Date Made", name: "date", widget: "datetime"}
+      - {label: "Aspect Ratio", name: "aspect_ratio", widget: "string", required: false}
+  - name: "news"
+    label: "News"
+    folder: "content/news"
+    create: true
+    fields:
+      - {label: "Title", name: "title", widget: "string"}
+      - {label: "Date", name: "date", widget: "datetime"}
+      - {label: "Body", name: "body", widget: "markdown"}
+      - {label: "Image", name: "image", widget: "image", required: false}
