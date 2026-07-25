@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+<script src="https://unpkg.com/js-yaml@4/dist/js-yaml.umd.min.js"></script>
+</head>
+<body>
+<x-dc>
+<template id="__bundler_thumbnail">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 56"><rect width="80" height="56" fill="#1d1f20"/><circle cx="26" cy="28" r="12" fill="none" stroke="#e8c547" stroke-width="2"/><path d="M26 20v6M26 32v6M20 28h6M32 28h6" stroke="#e8c547" stroke-width="2"/><text x="46" y="32" font-family="monospace" font-size="10" fill="#f2f2f2">ASTRIS</text></svg>
+</template>
+<helmet data-dc-atomics>
+<link rel="stylesheet" href="_ds/industry-d0a27021-9940-45d7-9d00-b7d2a16434bc/styles.css">
+<style>
+  a { color: var(--color-accent); }
+  a:hover { color: var(--color-accent-700); }
+  body { margin: 0; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: var(--color-neutral-300); }
+
+  /* Yellow accent override, OKLCH ramp matching the system's lightness steps */
+  :root {
+    --color-accent: oklch(74% 0.17 92);
+    --color-accent-100: oklch(97% 0.025 95);
+    --color-accent-200: oklch(93% 0.05 95);
+    --color-accent-300: oklch(87% 0.09 94);
+    --color-accent-400: oklch(80% 0.13 93);
+    --color-accent-500: oklch(74% 0.17 92);
+    --color-accent-600: oklch(64% 0.16 88);
+    --color-accent-700: oklch(50% 0.13 82);
+    --color-accent-800: oklch(37% 0.10 75);
+    --color-accent-900: oklch(24% 0.06 70);
+  }
+
+  @keyframes fadeInUp { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+  @keyframes heroIn { from { opacity: 0; transform: translateX(22px); } to { opacity: 1; transform: none; } }
+  @keyframes heroMediaIn { from { opacity: 0; transform: scale(1.04); } to { opacity: 1; transform: none; } }
+  @keyframes floatY { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
+
+  .card { transition: transform .35s cubic-bezier(.16,1,.3,1), box-shadow .35s ease, border-color .35s ease; }
+  .card:hover { transform: translateY(-6px); box-shadow: var(--shadow-md); border-color: var(--color-accent); }
+  .btn-primary { transition: transform .25s cubic-bezier(.16,1,.3,1), background .25s ease; }
+  .btn-primary:hover { transform: translateY(-2px); }
+  .btn-icon, .btn-ghost { transition: transform .2s ease, background .2s ease, color .2s ease; }
+  .btn-icon:hover { transform: scale(1.08); }
+
+  [data-anim="stagger"] > * { animation: fadeInUp .7s cubic-bezier(.16,1,.3,1) backwards; }
+  [data-anim="stagger"] > *:nth-child(1) { animation-delay: .02s; }
+  [data-anim="stagger"] > *:nth-child(2) { animation-delay: .08s; }
+  [data-anim="stagger"] > *:nth-child(3) { animation-delay: .14s; }
+  [data-anim="stagger"] > *:nth-child(4) { animation-delay: .20s; }
+  [data-anim="stagger"] > *:nth-child(5) { animation-delay: .26s; }
+  [data-anim="stagger"] > *:nth-child(6) { animation-delay: .32s; }
+  [data-anim="stagger"] > *:nth-child(7) { animation-delay: .38s; }
+  [data-anim="stagger"] > *:nth-child(8) { animation-delay: .44s; }
+
+  .hero-copy { animation: heroIn .6s cubic-bezier(.16,1,.3,1) backwards; }
+  .hero-media { animation: heroMediaIn .8s cubic-bezier(.16,1,.3,1) backwards; }
+  .hero-media-inner { animation: floatY 7s ease-in-out infinite; }
+  .page-in { animation: fadeInUp .5s cubic-bezier(.16,1,.3,1) backwards; }
+</style>
+</helmet>
+<div style="min-height:100vh;display:flex;flex-direction:column;background:var(--color-bg);color:var(--color-text);font-family:var(--font-body)">
+
+  <header class="nav" style="border-bottom:1px solid var(--color-divider);position:sticky;top:0;z-index:40;background:color-mix(in srgb, var(--color-bg) 92%, transparent);backdrop-filter:blur(6px);padding-left:28px;padding-right:28px">
+    <a href="#" onClick="{{ goHomeClick }}" class="nav-brand" style="display:flex;align-items:center;gap:9px;text-decoration:none;color:var(--color-text)">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent)" stroke-width="1.5"><circle cx="12" cy="12" r="9"></circle><path d="M12 3v4M12 17v4M3 12h4M17 12h4"></path></svg>
+      <span style="letter-spacing:0.02em">ASTRIS</span>
+    </a>
+    <nav style="display:flex;gap:22px;flex-wrap:wrap">
+      <sc-for list="{{ navItems }}" as="item" hint-placeholder-count="8">
+        <a href="#" onClick="{{ item.onClick }}" aria-current="{{ item.ariaCurrent }}" style="{{ item.style }}">{{ item.label }}</a>
+      </sc-for>
+    </nav>
+    <a href="#" onClick="{{ goNewsletterClick }}" class="btn btn-secondary" style="margin-left:8px">Subscribe</a>
+  </header>
+
+  <main style="flex:1">
+
+  <sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
+    <section style="position:relative;overflow:hidden;border-bottom:1px solid var(--color-divider)" onMouseEnter="{{ pauseHero }}" onMouseLeave="{{ resumeHero }}">
+      <div style="display:grid;grid-template-columns:1.05fr 0.95fr;min-height:560px">
+        <div key="{{ heroIndex }}" class="hero-copy" style="padding:64px 56px;display:flex;flex-direction:column;justify-content:center;gap:16px">
+          <span class="tag tag-outline" style="width:fit-content">{{ heroSlide.kicker }}</span>
+          <h1 style="font-size:54px;max-width:14ch">{{ heroSlide.title }}</h1>
+          <p style="max-width:46ch;font-size:16px;opacity:0.85">{{ heroSlide.desc }}</p>
+          <div style="display:flex;gap:12px;margin-top:8px">
+            <a href="#" onClick="{{ heroSlide.ctaClick }}" class="btn btn-primary">{{ heroSlide.cta }}</a>
+            <div style="display:flex;align-items:center;gap:8px;margin-left:8px">
+              <button onClick="{{ prevHero }}" aria-label="Previous" class="btn-icon" style="border:1px solid var(--color-divider);background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M15 18l-6-6 6-6"></path></svg></button>
+              <button onClick="{{ nextHero }}" aria-label="Next" class="btn-icon" style="border:1px solid var(--color-divider);background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 6l6 6-6 6"></path></svg></button>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:14px">
+            <sc-for list="{{ heroDots }}" as="dot" hint-placeholder-count="4">
+              <button onClick="{{ dot.onClick }}" aria-label="Go to slide" style="{{ dot.style }}"></button>
+            </sc-for>
+          </div>
+        </div>
+        <div key="{{ heroIndex }}" class="hero-media" style="height:100%;border-left:1px solid var(--color-divider);overflow:hidden">
+          <div class="hero-media-inner" style="height:100%">
+            <dc-import name="MediaPlaceholder" label="{{ heroSlide.tag }}" ratio="4 / 3" tone="accent" hint-size="100%,100%" style="height:100%"></dc-import>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section style="padding:64px 56px 40px">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin-bottom:24px">
+        <h2>Selected work</h2>
+        <a href="#" onClick="{{ goFilmsClick }}" class="btn btn-ghost">View all films →</a>
+      </div>
+      <div data-anim="stagger" style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px">
+        <sc-for list="{{ homeFilms }}" as="film" hint-placeholder-count="3">
+          <div class="card blueprint elev-sm" onClick="{{ film.onClick }}" style="cursor:pointer">
+            <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+            <dc-import name="MediaPlaceholder" label="{{ film.tag }}" ratio="16 / 9" tone="accent" hint-size="100%,160px"></dc-import>
+            <span class="card-kicker">{{ film.type }}</span>
+            <h3 class="card-title">{{ film.title }}</h3>
+            <span class="card-meta">{{ film.year }} · {{ film.duration }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+
+    <section style="padding:16px 56px 40px">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin-bottom:24px">
+        <h2>On location</h2>
+        <a href="#" onClick="{{ goPhotographyClick }}" class="btn btn-ghost">View gallery →</a>
+      </div>
+      <div data-anim="stagger" style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px">
+        <sc-for list="{{ homePhotos }}" as="photo" hint-placeholder-count="4">
+          <div onClick="{{ photo.onClick }}" style="cursor:pointer">
+            <dc-import name="MediaPlaceholder" label="{{ photo.tag }}" ratio="4 / 5" tone="neutral" hint-size="100%,220px"></dc-import>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+
+    <section style="padding:16px 56px 48px">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin-bottom:24px">
+        <h2>From the studio</h2>
+        <a href="#" onClick="{{ goNewsClick }}" class="btn btn-ghost">Read all news →</a>
+      </div>
+      <div data-anim="stagger" style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px">
+        <sc-for list="{{ homeNews }}" as="item" hint-placeholder-count="3">
+          <div class="card blueprint elev-sm" onClick="{{ goNewsClick }}" style="cursor:pointer">
+            <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+            <span class="card-meta">{{ item.date }} · {{ item.pub }}</span>
+            <h3 class="card-title" style="font-size:18px">{{ item.title }}</h3>
+            <p class="card-body">{{ item.excerpt }}</p>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+
+    <section style="margin:0 56px 56px;background:var(--color-accent-900);color:var(--color-bg);padding:52px;display:flex;align-items:center;justify-content:space-between;gap:24px;flex-wrap:wrap">
+      <div style="max-width:44ch">
+        <h6 style="color:var(--color-accent-300);margin-bottom:10px">The Wide Shot — Astris newsletter</h6>
+        <h2 style="color:var(--color-bg);margin-bottom:6px">Behind-the-scenes, monthly.</h2>
+        <p style="opacity:0.75;margin:0">Production notes, new work, and the odd meme from the edit bay — straight to your inbox.</p>
+      </div>
+      <a href="#" onClick="{{ goNewsletterClick }}" class="btn btn-primary">Read the newsletter</a>
+    </section>
+
+    <section style="padding:0 56px 64px">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin-bottom:24px">
+        <h2>Culture</h2>
+        <a href="#" onClick="{{ goCultureClick }}" class="btn btn-ghost">See more →</a>
+      </div>
+      <div data-anim="stagger" style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px">
+        <sc-for list="{{ homeCulture }}" as="post" hint-placeholder-count="4">
+          <div class="card blueprint" onClick="{{ goCultureClick }}" style="cursor:pointer;gap:10px">
+            <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+            <dc-import name="MediaPlaceholder" label="SOCIAL CLIP — 1:1" ratio="1 / 1" tone="neutral" hint-size="100%,140px"></dc-import>
+            <span class="tag tag-outline" style="width:fit-content">{{ post.platform }}</span>
+            <p class="card-body" style="font-size:12.5px">{{ post.caption }}</p>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+  </sc-if>
+
+  <sc-if value="{{ isFilms }}" hint-placeholder-val="{{ false }}">
+    <section class="page-in" style="padding:56px 56px 24px">
+      <h6 style="color:var(--color-accent-700)">Filmography</h6>
+      <h1 style="margin-bottom:8px">Films</h1>
+      <p style="max-width:60ch;opacity:0.8">Narrative shorts, documentary and commercial work from the Astris slate — 2023 to present.</p>
+    </section>
+    <sc-if value="{{ showFilters }}" hint-placeholder-val="{{ true }}">
+      <section style="padding:0 56px 32px">
+        <div class="seg">
+          <sc-for list="{{ filmFilterOptions }}" as="opt" hint-placeholder-count="5">
+            <label class="seg-opt"><input type="radio" name="filmFilter" checked="{{ opt.checked }}" onChange="{{ opt.onChange }}">{{ opt.label }}</label>
+          </sc-for>
+        </div>
+      </section>
+    </sc-if>
+    <section style="padding:0 56px 64px">
+      <div data-anim="stagger" style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px">
+        <sc-for list="{{ filteredFilms }}" as="film" hint-placeholder-count="6">
+          <div class="card blueprint elev-sm" onClick="{{ film.onClick }}" style="cursor:pointer">
+            <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+            <dc-import name="MediaPlaceholder" label="{{ film.tag }}" ratio="16 / 9" tone="accent" hint-size="100%,170px"></dc-import>
+            <span class="card-kicker">{{ film.type }}</span>
+            <h3 class="card-title">{{ film.title }}</h3>
+            <p class="card-body">{{ film.synopsis }}</p>
+            <span class="card-meta">{{ film.year }} · {{ film.duration }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+  </sc-if>
+
+  <sc-if value="{{ isPhotography }}" hint-placeholder-val="{{ false }}">
+    <section class="page-in" style="padding:56px 56px 24px">
+      <h6 style="color:var(--color-accent-700)">Photography</h6>
+      <h1 style="margin-bottom:8px">On location</h1>
+      <p style="max-width:60ch;opacity:0.8">Editorial stills, behind-the-scenes and location photography from shoots across the slate.</p>
+    </section>
+    <sc-if value="{{ showFilters }}" hint-placeholder-val="{{ true }}">
+      <section style="padding:0 56px 32px">
+        <div class="seg">
+          <sc-for list="{{ photoFilterOptions }}" as="opt" hint-placeholder-count="5">
+            <label class="seg-opt"><input type="radio" name="photoFilter" checked="{{ opt.checked }}" onChange="{{ opt.onChange }}">{{ opt.label }}</label>
+          </sc-for>
+        </div>
+      </section>
+    </sc-if>
+    <section style="padding:0 56px 64px">
+      <div data-anim="stagger" style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px">
+        <sc-for list="{{ filteredPhotos }}" as="photo" hint-placeholder-count="8">
+          <!-- photo.image (if set by the CMS) is passed through below -->
+          <div onClick="{{ photo.onClick }}" style="cursor:pointer;display:flex;flex-direction:column;gap:8px">
+            <dc-import name="MediaPlaceholder" label="{{ photo.tag }}" ratio="{{ photo.ratio }}" tone="neutral" src="{{ photo.image }}" hint-size="100%,220px"></dc-import>
+            <div>
+              <span class="tag tag-outline">{{ photo.category }}</span>
+              <p style="font-size:12.5px;margin:6px 0 0;opacity:0.75">{{ photo.caption }}</p>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+  </sc-if>
+
+  <sc-if value="{{ isNews }}" hint-placeholder-val="{{ false }}">
+    <section class="page-in" style="padding:56px 56px 32px">
+      <h6 style="color:var(--color-accent-700)">Press</h6>
+      <h1 style="margin-bottom:8px">News</h1>
+      <p style="max-width:60ch;opacity:0.8">Announcements, festival selections and press coverage.</p>
+    </section>
+    <section style="padding:0 56px 32px">
+      <div class="card blueprint elev-md" style="display:grid;grid-template-columns:1.1fr 1fr;gap:0;padding:0;overflow:hidden">
+        <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+        <div style="padding:36px;display:flex;flex-direction:column;justify-content:center;gap:10px">
+          <span class="card-meta">{{ featuredNews.date }} · {{ featuredNews.pub }}</span>
+          <h2 style="font-size:28px">{{ featuredNews.title }}</h2>
+          <p style="opacity:0.8">{{ featuredNews.excerpt }}</p>
+        </div>
+        <dc-import name="MediaPlaceholder" label="NEWS PLATE — 3:2" ratio="3 / 2" tone="accent" hint-size="100%,100%"></dc-import>
+      </div>
+    </section>
+    <section data-anim="stagger" style="padding:0 56px 64px;display:flex;flex-direction:column;gap:0">
+      <sc-for list="{{ restNews }}" as="item" hint-placeholder-count="5">
+        <div style="display:flex;gap:24px;align-items:baseline;padding:20px 0;border-bottom:1px solid var(--color-divider)">
+          <span class="card-meta" style="width:150px;flex:none">{{ item.date }}</span>
+          <span class="tag tag-outline" style="flex:none">{{ item.pub }}</span>
+          <h4 style="flex:1;margin:0">{{ item.title }}</h4>
+          <p style="flex:2;opacity:0.75;font-size:13px;margin:0">{{ item.excerpt }}</p>
+        </div>
+      </sc-for>
+    </section>
+  </sc-if>
+
+  <sc-if value="{{ isNewsletter }}" hint-placeholder-val="{{ false }}">
+    <section class="page-in" style="padding:56px 56px 40px;display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:start">
+      <div>
+        <h6 style="color:var(--color-accent-700)">Newsletter</h6>
+        <h1 style="margin-bottom:8px">The Wide Shot</h1>
+        <p style="max-width:50ch;opacity:0.8">Production notes, new work, festival dates and the occasional meme from the edit bay. One issue a month, no noise.</p>
+      </div>
+      <div class="card blueprint elev-sm">
+        <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+        <sc-if value="{{ newsletterSuccess }}" hint-placeholder-val="{{ false }}">
+          <h4 style="margin-bottom:6px">You're on the list.</h4>
+          <p class="card-body">{{ newsletterSuccessMsg }}</p>
+        </sc-if>
+        <sc-if value="{{ newsletterFormVisible }}" hint-placeholder-val="{{ true }}">
+          <form onSubmit="{{ onNewsletterSubmit }}" style="display:flex;flex-direction:column;gap:14px">
+            <div class="field">
+              <label for="nl-email">Email address</label>
+              <input id="nl-email" class="input" type="email" placeholder="you@studio.com" value="{{ newsletterEmail }}" onChange="{{ onNewsletterEmailChange }}">
+            </div>
+            <sc-if value="{{ newsletterError }}" hint-placeholder-val="{{ false }}">
+              <span style="font-size:12px;color:var(--color-accent-800)">{{ newsletterError }}</span>
+            </sc-if>
+            <button type="submit" class="btn btn-primary btn-block">Subscribe</button>
+            <span style="font-size:11px;opacity:0.6">Issue 15 lands August 2026. Unsubscribe anytime.</span>
+          </form>
+        </sc-if>
+      </div>
+    </section>
+    <section style="padding:0 56px 64px">
+      <h2 style="margin-bottom:20px">Archive</h2>
+      <div data-anim="stagger" style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px">
+        <sc-for list="{{ issues }}" as="issue" hint-placeholder-count="6">
+          <div class="card blueprint elev-sm" onClick="{{ issue.onClick }}" style="cursor:pointer">
+            <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+            <span class="card-kicker">Issue {{ issue.number }} · {{ issue.date }}</span>
+            <h3 class="card-title" style="font-size:17px">{{ issue.title }}</h3>
+            <p class="card-body">{{ issue.teaser }}</p>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+  </sc-if>
+
+  <sc-if value="{{ isCulture }}" hint-placeholder-val="{{ false }}">
+    <section class="page-in" style="padding:56px 56px 8px">
+      <h6 style="color:var(--color-accent-700)">Culture</h6>
+      <h1 style="margin-bottom:8px">Off the clock</h1>
+      <p style="max-width:60ch;opacity:0.8">The lighter side of the studio — behind-the-scenes, bloopers and social clips, compiled monthly in the newsletter.</p>
+    </section>
+    <section style="padding:24px 56px 64px">
+      <div data-anim="stagger" style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px">
+        <sc-for list="{{ cultureAll }}" as="post" hint-placeholder-count="8">
+          <div class="card blueprint" style="gap:10px">
+            <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+            <dc-import name="MediaPlaceholder" label="{{ post.tag }}" ratio="1 / 1" tone="neutral" hint-size="100%,160px"></dc-import>
+            <span class="tag tag-outline" style="width:fit-content">{{ post.platform }}</span>
+            <p class="card-body" style="font-size:12.5px">{{ post.caption }}</p>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+  </sc-if>
+
+  <sc-if value="{{ isAbout }}" hint-placeholder-val="{{ false }}">
+    <section class="page-in" style="padding:56px 56px 24px">
+      <h6 style="color:var(--color-accent-700)">About</h6>
+      <h1 style="margin-bottom:12px">A small studio, built for the long shot.</h1>
+      <p style="max-width:64ch;opacity:0.8;font-size:16px">Astris is an independent film and production studio working across narrative shorts, documentary, commercial and music video. We shoot on location, cut in-house, and publish a monthly newsletter that shows our work as it's actually made.</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:20px">
+        <sc-for list="{{ capabilities }}" as="cap" hint-placeholder-count="6">
+          <span class="tag tag-accent">{{ cap }}</span>
+        </sc-for>
+      </div>
+    </section>
+    <section style="padding:16px 56px 64px">
+      <h2 style="margin-bottom:20px">Team</h2>
+      <div data-anim="stagger" style="display:grid;grid-template-columns:repeat(6,1fr);gap:16px">
+        <sc-for list="{{ team }}" as="member" hint-placeholder-count="6">
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <dc-import name="MediaPlaceholder" label="PORTRAIT — 1:1" ratio="1 / 1" tone="accent" hint-size="100%,140px"></dc-import>
+            <div>
+              <div style="font-family:var(--font-heading);font-weight:600;font-size:15px">{{ member.name }}</div>
+              <div style="font-size:12px;opacity:0.65">{{ member.role }}</div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+  </sc-if>
+
+  <sc-if value="{{ isContact }}" hint-placeholder-val="{{ false }}">
+    <section class="page-in" style="padding:56px 56px 64px;display:grid;grid-template-columns:1.1fr 0.9fr;gap:56px">
+      <div>
+        <h6 style="color:var(--color-accent-700)">Contact</h6>
+        <h1 style="margin-bottom:8px">Let's talk about the work.</h1>
+        <p style="max-width:50ch;opacity:0.8;margin-bottom:28px">Booking a shoot, press inquiry or just want to say hello — tell us a bit about it.</p>
+        <sc-if value="{{ contactSuccess }}" hint-placeholder-val="{{ false }}">
+          <div class="card blueprint elev-sm">
+            <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+            <h4 style="margin-bottom:6px">Message sent.</h4>
+            <p class="card-body">We reply within two business days.</p>
+          </div>
+        </sc-if>
+        <sc-if value="{{ contactFormVisible }}" hint-placeholder-val="{{ true }}">
+          <form onSubmit="{{ onContactSubmit }}" style="display:flex;flex-direction:column;gap:16px;max-width:480px">
+            <div class="seg">
+              <sc-for list="{{ contactTypeOptions }}" as="opt" hint-placeholder-count="3">
+                <label class="seg-opt"><input type="radio" name="contactType" checked="{{ opt.checked }}" onChange="{{ opt.onChange }}">{{ opt.label }}</label>
+              </sc-for>
+            </div>
+            <div class="field">
+              <label for="ct-name">Name</label>
+              <input id="ct-name" class="input" type="text" placeholder="Jane Doe" value="{{ contactName }}" onChange="{{ onContactNameChange }}">
+            </div>
+            <div class="field">
+              <label for="ct-email">Email</label>
+              <input id="ct-email" class="input" type="email" placeholder="you@studio.com" value="{{ contactEmail }}" onChange="{{ onContactEmailChange }}">
+            </div>
+            <div class="field">
+              <label for="ct-message">Message</label>
+              <textarea id="ct-message" class="input" rows="4" placeholder="Tell us about the project…" value="{{ contactMessage }}" onChange="{{ onContactMessageChange }}"></textarea>
+            </div>
+            <sc-if value="{{ contactError }}" hint-placeholder-val="{{ false }}">
+              <span style="font-size:12px;color:var(--color-accent-800)">{{ contactError }}</span>
+            </sc-if>
+            <button type="submit" class="btn btn-primary btn-block">Send message</button>
+          </form>
+        </sc-if>
+      </div>
+      <div class="card blueprint elev-sm" style="height:fit-content">
+        <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+        <h6>Studio</h6>
+        <p class="card-body" style="margin-bottom:14px">412 Foundry Street, Unit 4<br>Los Angeles, CA 90013</p>
+        <h6>Email</h6>
+        <p class="card-body" style="margin-bottom:14px">hello@astris.studio</p>
+        <h6>Phone</h6>
+        <p class="card-body" style="margin-bottom:14px">+1 (323) 555-0148</p>
+        <h6>Follow</h6>
+        <p class="card-body">Instagram · TikTok · Vimeo</p>
+      </div>
+    </section>
+  </sc-if>
+
+  </main>
+
+  <footer style="border-top:1px solid var(--color-divider);padding:40px 56px;display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap">
+    <div style="display:flex;align-items:center;gap:9px">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent)" stroke-width="1.5"><circle cx="12" cy="12" r="9"></circle><path d="M12 3v4M12 17v4M3 12h4M17 12h4"></path></svg>
+      <span style="font-family:var(--font-heading);font-weight:600">ASTRIS</span>
+    </div>
+    <nav style="display:flex;gap:18px;flex-wrap:wrap">
+      <sc-for list="{{ navItems }}" as="item" hint-placeholder-count="8">
+        <a href="#" onClick="{{ item.onClick }}" style="font-size:13px">{{ item.label }}</a>
+      </sc-for>
+    </nav>
+    <span style="font-size:12px;opacity:0.55">© 2026 Astris Motion Pictures</span>
+  </footer>
+
+  <sc-if value="{{ modalOpen }}" hint-placeholder-val="{{ false }}">
+    <div class="dialog-backdrop" onClick="{{ closeModal }}" style="z-index:100">
+      <div class="dialog" onClick="{{ stopProp }}" style="max-width:640px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+          <span class="card-kicker">{{ modalKicker }}</span>
+          <button onClick="{{ closeModal }}" class="btn-icon" style="border:none;background:transparent;cursor:pointer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M18 6L6 18M6 6l12 12"></path></svg></button>
+        </div>
+        <dc-import name="MediaPlaceholder" label="{{ modalTag }}" ratio="{{ modalRatio }}" tone="accent" src="{{ modalImage }}" hint-size="100%,260px"></dc-import>
+        <h3 class="dialog-title">{{ modalTitle }}</h3>
+        <span class="card-meta">{{ modalMeta }}</span>
+        <p class="dialog-body">{{ modalBody }}</p>
+        <div class="dialog-actions">
+          <button class="btn btn-secondary" onClick="{{ closeModal }}">Close</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;heroAutoplaySeconds&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:6,&quot;min&quot;:3,&quot;max&quot;:12,&quot;step&quot;:1,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Behavior&quot;},&quot;defaultLandingPage&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;home&quot;,&quot;options&quot;:[&quot;home&quot;,&quot;films&quot;,&quot;photography&quot;,&quot;news&quot;,&quot;newsletter&quot;,&quot;culture&quot;,&quot;about&quot;,&quot;contact&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Behavior&quot;},&quot;showFilters&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Behavior&quot;}}">
+const NAV = [
+  { id: "home", label: "Home" },
+  { id: "films", label: "Films" },
+  { id: "photography", label: "Photography" },
+  { id: "news", label: "News" },
+  { id: "newsletter", label: "Newsletter" },
+  { id: "culture", label: "Culture" },
+  { id: "about", label: "About" },
+  { id: "contact", label: "Contact" }
+];
+
+const HERO_SLIDES = [
+  { kicker: "LATEST FILM", title: "Hollow Signal", desc: "A short film about isolation and connectivity, shot on 16mm.", cta: "Watch the reel", tag: "FILM STILL — 16:9", page: "films" },
+  { kicker: "PHOTO STORY", title: "Coastline, After", desc: "A three-day documentary shoot along the Pacific Northwest coast.", cta: "View gallery", tag: "LOCATION — 4:3", page: "photography" },
+  { kicker: "FROM THE STUDIO", title: "Astris signs with Meridian Records", desc: "A three-picture partnership announced for the 2027 slate.", cta: "Read the news", tag: "NEWS PLATE — 4:3", page: "news" },
+  { kicker: "NEWSLETTER — ISSUE 14", title: "The Wide Shot", desc: "Behind the scenes of our latest commercial campaign, plus a reading list.", cta: "Read the issue", tag: "ISSUE COVER — 4:3", page: "newsletter" }
+];
+
+const FILMS = [
+  { title: "Hollow Signal", type: "Narrative", year: "2026", duration: "14 min", synopsis: "A radio operator on a remote coast loses more than signal.", tag: "FILM STILL — 16:9" },
+  { title: "Coastline, After", type: "Documentary", year: "2025", duration: "22 min", synopsis: "Three days with the last commercial fishing crew on the Strait.", tag: "FILM STILL — 16:9" },
+  { title: "Night Drive", type: "Commercial", year: "2026", duration: "1 min 30s", synopsis: "Launch film for Meridian Records' Night Drive campaign.", tag: "FILM STILL — 16:9" },
+  { title: "Static & Stone", type: "Narrative", year: "2024", duration: "18 min", synopsis: "Two brothers return to the quarry town that raised them.", tag: "FILM STILL — 16:9" },
+  { title: "Nine Rivers", type: "Documentary", year: "2025", duration: "31 min", synopsis: "Following a watershed restoration project across nine counties.", tag: "FILM STILL — 16:9" },
+  { title: "Halflight", type: "Music Video", year: "2026", duration: "4 min 10s", synopsis: "A single-take video for Halflight's 'Nocturne'.", tag: "FILM STILL — 16:9" },
+  { title: "The Long Yard", type: "Narrative", year: "2023", duration: "16 min", synopsis: "A groundskeeper's last season before the stadium closes.", tag: "FILM STILL — 16:9" },
+  { title: "Salt & Circuit", type: "Commercial", year: "2025", duration: "45s", synopsis: "Brand film for a coastal battery-tech startup.", tag: "FILM STILL — 16:9" },
+  { title: "Wax and Wane", type: "Music Video", year: "2024", duration: "3 min 50s", synopsis: "Lunar-themed visual for the title track of Wane's debut EP.", tag: "FILM STILL — 16:9" }
+];
+const FILM_TYPES = ["All", "Narrative", "Documentary", "Commercial", "Music Video"];
+
+const PHOTOS = [
+  { category: "Editorial", ratio: "4 / 5", caption: "Hollow Signal — unit stills, day 2", tag: "EDITORIAL — 4:5" },
+  { category: "Location", ratio: "3 / 2", caption: "Pacific Northwest coastline, dawn", tag: "LOCATION — 3:2" },
+  { category: "Behind the Scenes", ratio: "1 / 1", caption: "Lighting setup, Night Drive shoot", tag: "BTS — 1:1" },
+  { category: "Portrait", ratio: "4 / 5", caption: "Cast portrait, Static & Stone", tag: "PORTRAIT — 4:5" },
+  { category: "Editorial", ratio: "3 / 2", caption: "Nine Rivers — restoration site", tag: "EDITORIAL — 3:2" },
+  { category: "Location", ratio: "4 / 5", caption: "The quarry, off-season", tag: "LOCATION — 4:5" },
+  { category: "Behind the Scenes", ratio: "3 / 2", caption: "Crew lunch, Coastline After", tag: "BTS — 3:2" },
+  { category: "Portrait", ratio: "1 / 1", caption: "Director portrait, on set", tag: "PORTRAIT — 1:1" },
+  { category: "Editorial", ratio: "4 / 5", caption: "Halflight — colour test frame", tag: "EDITORIAL — 4:5" },
+  { category: "Location", ratio: "1 / 1", caption: "Stadium, final season", tag: "LOCATION — 1:1" }
+];
+const PHOTO_CATEGORIES = ["All", "Editorial", "Behind the Scenes", "Location", "Portrait"];
+
+const NEWS = [
+  { date: "Jul 2026", pub: "Studio", title: "Astris signs with Meridian Records", excerpt: "A three-picture partnership announced for the 2027 slate, beginning with Night Drive." },
+  { date: "Jun 2026", pub: "Festival", title: "Hollow Signal selected for Camden Shorts", excerpt: "Our latest narrative short premieres in competition this September." },
+  { date: "May 2026", pub: "Press", title: "Coastline, After named a Vimeo Staff Pick", excerpt: "The documentary short is now streaming in full on our Films page." },
+  { date: "Mar 2026", pub: "Studio", title: "Astris opens a second edit bay", excerpt: "Expanded post-production capacity to support a growing commercial slate." },
+  { date: "Jan 2026", pub: "Press", title: "Founder interview: 'Shoot on location, always'", excerpt: "A conversation on documentary method and working independent." },
+  { date: "Nov 2025", pub: "Festival", title: "Nine Rivers wins Best Documentary Short", excerpt: "Recognized at the Lower Basin Environmental Film Festival." }
+];
+
+const ISSUES = [
+  { number: 14, date: "Jun 2026", title: "The Wide Shot", teaser: "Behind the scenes of Night Drive, plus a reading list." },
+  { number: 13, date: "May 2026", title: "Slow Season", teaser: "What we shoot when nothing's on the call sheet." },
+  { number: 12, date: "Apr 2026", title: "The Edit Bay", teaser: "How Coastline, After found its final cut." },
+  { number: 11, date: "Mar 2026", title: "On Location: Nine Rivers", teaser: "Three weeks following a watershed crew." },
+  { number: 10, date: "Feb 2026", title: "New Faces", teaser: "Introducing two new crew members." },
+  { number: 9, date: "Jan 2026", title: "2025, Reviewed", teaser: "A year of shorts, spots and one very long winter shoot." }
+];
+
+const CULTURE = [
+  { platform: "Reel", caption: "The gimbal rig held together with a single zip tie. It worked.", tag: "REEL — 1:1" },
+  { platform: "Post", caption: "Craft services ranked by shoot, a definitive list.", tag: "POST — 1:1" },
+  { platform: "Clip", caption: "Director's fifth take of the same three-second shot.", tag: "CLIP — 1:1" },
+  { platform: "Reel", caption: "What 'golden hour' actually looks like at 6am in March.", tag: "REEL — 1:1" },
+  { platform: "Post", caption: "The whiteboard schedule, week three of pre-production.", tag: "POST — 1:1" },
+  { platform: "Clip", caption: "Boom mic cameo, again.", tag: "CLIP — 1:1" },
+  { platform: "Post", caption: "Coffee order tally for the Night Drive shoot: 214.", tag: "POST — 1:1" },
+  { platform: "Reel", caption: "Sound guy's opinion on the weather. Unfiltered.", tag: "REEL — 1:1" }
+];
+
+const TEAM = [
+  { name: "Nadia Okafor", role: "Director / Founder" },
+  { name: "Elliot Voss", role: "Director of Photography" },
+  { name: "Priya Anand", role: "Editor" },
+  { name: "Marcus Wren", role: "Producer" },
+  { name: "Sofia Reyes", role: "Sound Design" },
+  { name: "Theo Lindqvist", role: "Motion Design" }
+];
+
+const CAPABILITIES = ["Directing", "Cinematography", "Photography", "Editorial", "Motion Design", "Sound"];
+
+const CONTACT_TYPES = ["General inquiry", "Booking", "Press"];
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+class Component extends DCLogic {
+  state = {
+    page: this.props.defaultLandingPage ?? "home",
+    heroIndex: 0,
+    heroPaused: false,
+    filmFilter: "All",
+    photoFilter: "All",
+    modal: null,
+    newsletterEmail: "",
+    newsletterError: "",
+    newsletterSuccess: false,
+    contactName: "",
+    contactEmail: "",
+    contactMessage: "",
+    contactType: "General inquiry",
+    contactError: "",
+    contactSuccess: false,
+    cmsPhotos: [],
+    cmsVideos: [],
+    cmsNews: []
+  };
+
+  componentDidMount() {
+    this._timer = setInterval(() => {
+      if (!this.state.heroPaused && !this.state.modal && this.state.page === "home") {
+        this.setState(s => ({ heroIndex: (s.heroIndex + 1) % HERO_SLIDES.length }));
+      }
+    }, (this.props.heroAutoplaySeconds ?? 6) * 1000);
+    this.loadCmsContent();
+  }
+  componentWillUnmount() {
+    clearInterval(this._timer);
+  }
+
+  parseCmsFile(text) {
+    const fm = text.match(/^---\s*\n([\s\S]*?)\n---\s*\n?([\s\S]*)$/);
+    try {
+      if (fm) {
+        const data = (window.jsyaml && window.jsyaml.load(fm[1])) || {};
+        data.body = (fm[2] || "").trim();
+        return data;
+      }
+      return (window.jsyaml && window.jsyaml.load(text)) || {};
+    } catch (e) {
+      console.error("Could not parse CMS file", e);
+      return {};
+    }
+  }
+
+  async loadCmsContent() {
+    const repo = "penguinator128/Astris";
+    const folders = { cmsPhotos: "photos", cmsVideos: "videos", cmsNews: "news" };
+    await Promise.all(Object.entries(folders).map(async ([stateKey, folder]) => {
+      try {
+        const listRes = await fetch("https://api.github.com/repos/" + repo + "/contents/content/" + folder);
+        if (!listRes.ok) return;
+        const files = await listRes.json();
+        if (!Array.isArray(files)) return;
+        const items = await Promise.all(
+          files
+            .filter(f => /\.(yml|yaml|md)$/i.test(f.name))
+            .map(async f => {
+              const raw = await fetch(f.download_url).then(r => r.text());
+              return this.parseCmsFile(raw);
+            })
+        );
+        items.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+        this.setState({ [stateKey]: items });
+      } catch (e) {
+        console.error("Failed to load " + folder, e);
+      }
+    }));
+  }
+
+  setPage(id) { this.setState({ page: id }); }
+  stopProp(e) { e.stopPropagation(); }
+  openModal(kind, item) { this.setState({ modal: { kind, item } }); }
+  closeModal() { this.setState({ modal: null }); }
+
+  onNewsletterSubmit(e) {
+    e.preventDefault();
+    if (!EMAIL_RE.test(this.state.newsletterEmail)) {
+      this.setState({ newsletterError: "Enter a valid email address." });
+      return;
+    }
+    this.setState({ newsletterError: "", newsletterSuccess: true });
+  }
+
+  onContactSubmit(e) {
+    e.preventDefault();
+    const { contactName, contactEmail, contactMessage } = this.state;
+    if (!contactName.trim() || !EMAIL_RE.test(contactEmail) || !contactMessage.trim()) {
+      this.setState({ contactError: "Fill in your name, a valid email, and a short message." });
+      return;
+    }
+    this.setState({ contactError: "", contactSuccess: true });
+  }
+
+  renderVals() {
+    const { page, heroIndex, filmFilter, photoFilter, modal } = this.state;
+    const showFilters = this.props.showFilters ?? true;
+
+    const navItems = NAV.map(n => ({
+      ...n,
+      onClick: e => { e.preventDefault(); this.setPage(n.id); },
+      ariaCurrent: n.id === page ? "page" : undefined,
+      style: n.id === page
+        ? "color:var(--color-accent-700);font-weight:600;text-decoration:none"
+        : "color:inherit;text-decoration:none"
+    }));
+
+    const heroSlideRaw = HERO_SLIDES[heroIndex];
+    const heroSlide = { ...heroSlideRaw, ctaClick: e => { e.preventDefault(); this.setPage(heroSlideRaw.page); } };
+    const heroDots = HERO_SLIDES.map((s, i) => ({
+      onClick: () => this.setState({ heroIndex: i }),
+      style: `width:8px;height:8px;border-radius:50%;border:none;cursor:pointer;padding:0;background:${i === heroIndex ? "var(--color-accent)" : "var(--color-neutral-300)"}`
+    }));
+
+    const filmWithHandlers = FILMS.map(f => ({ ...f, onClick: () => this.openModal("film", f) }));
+    const filteredFilms = filmFilter === "All" ? filmWithHandlers : filmWithHandlers.filter(f => f.type === filmFilter);
+    const filmFilterOptions = FILM_TYPES.map(t => ({
+      label: t, checked: t === filmFilter, onChange: () => this.setState({ filmFilter: t })
+    }));
+
+    const cmsPhotosNormalized = (this.state.cmsPhotos || []).map(p => ({
+      category: p.project || "New",
+      ratio: "4 / 5",
+      caption: p.caption || p.title || "",
+      tag: (p.title || "PHOTO").toUpperCase(),
+      image: p.image || ""
+    }));
+    const photoWithHandlers = [...cmsPhotosNormalized, ...PHOTOS].map(p => ({ ...p, onClick: () => this.openModal("photo", p) }));
+    const filteredPhotos = photoFilter === "All" ? photoWithHandlers : photoWithHandlers.filter(p => p.category === photoFilter);
+    const photoFilterOptions = PHOTO_CATEGORIES.map(c => ({
+      label: c, checked: c === photoFilter, onChange: () => this.setState({ photoFilter: c })
+    }));
+
+    const issuesWithHandlers = ISSUES.map(i => ({ ...i, onClick: () => this.openModal("issue", i) }));
+
+    let modalOpen = false, modalKicker = "", modalTitle = "", modalMeta = "", modalBody = "", modalTag = "", modalRatio = "16 / 9", modalImage = "";
+    if (modal) {
+      modalOpen = true;
+      if (modal.kind === "film") {
+        modalKicker = modal.item.type; modalTitle = modal.item.title;
+        modalMeta = modal.item.year + " · " + modal.item.duration;
+        modalBody = modal.item.synopsis + " Full credits and screening details available on request.";
+        modalTag = modal.item.tag; modalRatio = "16 / 9";
+      } else if (modal.kind === "photo") {
+        modalKicker = modal.item.category; modalTitle = modal.item.caption;
+        modalMeta = "Astris Studio";
+        modalBody = "Shot on location as part of the Astris photography archive. Prints and licensing available on request.";
+        modalTag = modal.item.tag; modalRatio = modal.item.ratio; modalImage = modal.item.image || "";
+      } else if (modal.kind === "issue") {
+        modalKicker = "Issue " + modal.item.number; modalTitle = modal.item.title;
+        modalMeta = modal.item.date;
+        modalBody = modal.item.teaser + " Read the full issue in your inbox — subscribe below to catch the next one.";
+        modalTag = "ISSUE COVER — 4:3"; modalRatio = "4 / 3";
+      }
+    }
+
+    const cmsNewsNormalized = (this.state.cmsNews || []).map(n => ({
+      date: n.date ? new Date(n.date).toLocaleDateString("en-US", { month: "short", year: "numeric" }) : "",
+      pub: "Studio",
+      title: n.title || "",
+      excerpt: (n.body || "").slice(0, 160)
+    }));
+    const allNews = [...cmsNewsNormalized, ...NEWS];
+    const featuredNews = { ...allNews[0] };
+    const restNews = allNews.slice(1);
+
+    const contactTypeOptions = CONTACT_TYPES.map(t => ({
+      label: t, checked: t === this.state.contactType, onChange: () => this.setState({ contactType: t })
+    }));
+
+    return {
+      navItems,
+      goHomeClick: e => { e.preventDefault(); this.setPage("home"); },
+      goFilmsClick: e => { e.preventDefault(); this.setPage("films"); },
+      goPhotographyClick: e => { e.preventDefault(); this.setPage("photography"); },
+      goNewsClick: e => { e.preventDefault(); this.setPage("news"); },
+      goNewsletterClick: e => { e.preventDefault(); this.setPage("newsletter"); },
+      goCultureClick: e => { e.preventDefault(); this.setPage("culture"); },
+
+      isHome: page === "home", isFilms: page === "films", isPhotography: page === "photography",
+      isNews: page === "news", isNewsletter: page === "newsletter", isCulture: page === "culture",
+      isAbout: page === "about", isContact: page === "contact",
+
+      heroSlide, heroDots,
+      pauseHero: () => this.setState({ heroPaused: true }),
+      resumeHero: () => this.setState({ heroPaused: false }),
+      prevHero: () => this.setState(s => ({ heroIndex: (s.heroIndex - 1 + HERO_SLIDES.length) % HERO_SLIDES.length })),
+      nextHero: () => this.setState(s => ({ heroIndex: (s.heroIndex + 1) % HERO_SLIDES.length })),
+
+      homeFilms: filmWithHandlers.slice(0, 3),
+      homePhotos: photoWithHandlers.slice(0, 4),
+      homeNews: NEWS.slice(0, 3),
+      homeCulture: CULTURE.slice(0, 4),
+
+      showFilters,
+      filmFilterOptions, filteredFilms,
+      photoFilterOptions, filteredPhotos,
+
+      featuredNews, restNews,
+
+      issues: issuesWithHandlers,
+      newsletterEmail: this.state.newsletterEmail,
+      newsletterError: this.state.newsletterError,
+      newsletterSuccess: this.state.newsletterSuccess,
+      newsletterFormVisible: !this.state.newsletterSuccess,
+      newsletterSuccessMsg: "Issue 15 lands August 2026 — we'll send it straight to your inbox.",
+      onNewsletterEmailChange: e => this.setState({ newsletterEmail: e.target.value }),
+      onNewsletterSubmit: e => this.onNewsletterSubmit(e),
+
+      cultureAll: CULTURE,
+
+      capabilities: CAPABILITIES,
+      team: TEAM,
+
+      contactTypeOptions,
+      contactName: this.state.contactName,
+      contactEmail: this.state.contactEmail,
+      contactMessage: this.state.contactMessage,
+      contactError: this.state.contactError,
+      contactSuccess: this.state.contactSuccess,
+      contactFormVisible: !this.state.contactSuccess,
+      onContactNameChange: e => this.setState({ contactName: e.target.value }),
+      onContactEmailChange: e => this.setState({ contactEmail: e.target.value }),
+      onContactMessageChange: e => this.setState({ contactMessage: e.target.value }),
+      onContactSubmit: e => this.onContactSubmit(e),
+
+      modalOpen, modalKicker, modalTitle, modalMeta, modalBody, modalTag, modalRatio, modalImage,
+      closeModal: () => this.closeModal(),
+      stopProp: e => this.stopProp(e)
+    };
+  }
+}
+</script>
+</body>
+</html>
