@@ -73,7 +73,6 @@
         <a href="#" onClick="{{ item.onClick }}" aria-current="{{ item.ariaCurrent }}" style="{{ item.style }}">{{ item.label }}</a>
       </sc-for>
     </nav>
-    <a href="#" onClick="{{ goNewsletterClick }}" class="btn btn-secondary" style="margin-left:8px">Subscribe</a>
   </header>
 
   <main style="flex:1">
@@ -106,38 +105,6 @@
       </div>
     </section>
 
-    <section style="padding:64px 56px 40px">
-      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin-bottom:24px">
-        <h2>Selected work</h2>
-        <a href="#" onClick="{{ goFilmsClick }}" class="btn btn-ghost">View all films →</a>
-      </div>
-      <div data-anim="stagger" style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px">
-        <sc-for list="{{ homeFilms }}" as="film" hint-placeholder-count="3">
-          <div class="card blueprint elev-sm" onClick="{{ film.onClick }}" style="cursor:pointer">
-            <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
-            <dc-import name="MediaPlaceholder" label="{{ film.tag }}" ratio="16 / 9" tone="accent" hint-size="100%,160px"></dc-import>
-            <span class="card-kicker">{{ film.type }}</span>
-            <h3 class="card-title">{{ film.title }}</h3>
-            <span class="card-meta">{{ film.year }} · {{ film.duration }}</span>
-          </div>
-        </sc-for>
-      </div>
-    </section>
-
-    <section style="padding:16px 56px 40px">
-      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin-bottom:24px">
-        <h2>On location</h2>
-        <a href="#" onClick="{{ goPhotographyClick }}" class="btn btn-ghost">View gallery →</a>
-      </div>
-      <div data-anim="stagger" style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px">
-        <sc-for list="{{ homePhotos }}" as="photo" hint-placeholder-count="4">
-          <div onClick="{{ photo.onClick }}" style="cursor:pointer">
-            <dc-import name="MediaPlaceholder" label="{{ photo.tag }}" ratio="4 / 5" tone="neutral" src="{{ photo.image }}" hint-size="100%,220px"></dc-import>
-          </div>
-        </sc-for>
-      </div>
-    </section>
-
     <section style="padding:16px 56px 48px">
       <div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin-bottom:24px">
         <h2>From the studio</h2>
@@ -157,25 +124,26 @@
 
     <section style="margin:0 56px 56px;background:var(--color-accent-900);color:var(--color-bg);padding:52px;display:flex;align-items:center;justify-content:space-between;gap:24px;flex-wrap:wrap">
       <div style="max-width:44ch">
-        <h6 style="color:var(--color-accent-300);margin-bottom:10px">The Wide Shot — Astris newsletter</h6>
-        <h2 style="color:var(--color-bg);margin-bottom:6px">Behind-the-scenes, monthly.</h2>
-        <p style="opacity:0.75;margin:0">Production notes, new work, and the odd meme from the edit bay — straight to your inbox.</p>
+        <h6 style="color:var(--color-accent-300);margin-bottom:10px">About Astris</h6>
+        <h2 style="color:var(--color-bg);margin-bottom:6px">A small studio, built for the long shot.</h2>
+        <p style="opacity:0.75;margin:0">Astris is an independent film and production studio working across narrative shorts, documentary, commercial and music video.</p>
       </div>
-      <a href="#" onClick="{{ goNewsletterClick }}" class="btn btn-primary">Read the newsletter</a>
+      <a href="#" onClick="{{ goAboutClick }}" class="btn btn-primary">About the studio</a>
     </section>
 
     <section style="padding:0 56px 64px">
       <div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin-bottom:24px">
-        <h2>Culture</h2>
-        <a href="#" onClick="{{ goCultureClick }}" class="btn btn-ghost">See more →</a>
+        <h2>Latest</h2>
+        <a href="#" onClick="{{ goPhotographyClick }}" class="btn btn-ghost">See more →</a>
       </div>
       <div data-anim="stagger" style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px">
-        <sc-for list="{{ homeCulture }}" as="post" hint-placeholder-count="4">
-          <div class="card blueprint" onClick="{{ goCultureClick }}" style="cursor:pointer;gap:10px">
-            <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
-            <dc-import name="MediaPlaceholder" label="SOCIAL CLIP — 1:1" ratio="1 / 1" tone="neutral" hint-size="100%,140px"></dc-import>
-            <span class="tag tag-outline" style="width:fit-content">{{ post.platform }}</span>
-            <p class="card-body" style="font-size:12.5px">{{ post.caption }}</p>
+        <sc-for list="{{ latestSubmissions }}" as="item" hint-placeholder-count="4">
+          <div onClick="{{ item.onClick }}" style="cursor:pointer;display:flex;flex-direction:column;gap:8px">
+            <dc-import name="MediaPlaceholder" label="{{ item.tag }}" ratio="4 / 5" tone="neutral" src="{{ item.image }}" hint-size="100%,180px"></dc-import>
+            <div>
+              <span class="tag tag-outline">{{ item.category }}</span>
+              <p style="font-size:12.5px;margin:6px 0 0;opacity:0.75">{{ item.caption }}</p>
+            </div>
           </div>
         </sc-for>
       </div>
@@ -270,69 +238,6 @@
           <p style="flex:2;opacity:0.75;font-size:13px;margin:0">{{ item.excerpt }}</p>
         </div>
       </sc-for>
-    </section>
-  </sc-if>
-
-  <sc-if value="{{ isNewsletter }}" hint-placeholder-val="{{ false }}">
-    <section class="page-in" style="padding:56px 56px 40px;display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:start">
-      <div>
-        <h6 style="color:var(--color-accent-700)">Newsletter</h6>
-        <h1 style="margin-bottom:8px">The Wide Shot</h1>
-        <p style="max-width:50ch;opacity:0.8">Production notes, new work, festival dates and the occasional meme from the edit bay. One issue a month, no noise.</p>
-      </div>
-      <div class="card blueprint elev-sm">
-        <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
-        <sc-if value="{{ newsletterSuccess }}" hint-placeholder-val="{{ false }}">
-          <h4 style="margin-bottom:6px">You're on the list.</h4>
-          <p class="card-body">{{ newsletterSuccessMsg }}</p>
-        </sc-if>
-        <sc-if value="{{ newsletterFormVisible }}" hint-placeholder-val="{{ true }}">
-          <form onSubmit="{{ onNewsletterSubmit }}" style="display:flex;flex-direction:column;gap:14px">
-            <div class="field">
-              <label for="nl-email">Email address</label>
-              <input id="nl-email" class="input" type="email" placeholder="you@studio.com" value="{{ newsletterEmail }}" onChange="{{ onNewsletterEmailChange }}">
-            </div>
-            <sc-if value="{{ newsletterError }}" hint-placeholder-val="{{ false }}">
-              <span style="font-size:12px;color:var(--color-accent-800)">{{ newsletterError }}</span>
-            </sc-if>
-            <button type="submit" class="btn btn-primary btn-block">Subscribe</button>
-            <span style="font-size:11px;opacity:0.6">Issue 15 lands August 2026. Unsubscribe anytime.</span>
-          </form>
-        </sc-if>
-      </div>
-    </section>
-    <section style="padding:0 56px 64px">
-      <h2 style="margin-bottom:20px">Archive</h2>
-      <div data-anim="stagger" style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px">
-        <sc-for list="{{ issues }}" as="issue" hint-placeholder-count="6">
-          <div class="card blueprint elev-sm" onClick="{{ issue.onClick }}" style="cursor:pointer">
-            <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
-            <span class="card-kicker">Issue {{ issue.number }} · {{ issue.date }}</span>
-            <h3 class="card-title" style="font-size:17px">{{ issue.title }}</h3>
-            <p class="card-body">{{ issue.teaser }}</p>
-          </div>
-        </sc-for>
-      </div>
-    </section>
-  </sc-if>
-
-  <sc-if value="{{ isCulture }}" hint-placeholder-val="{{ false }}">
-    <section class="page-in" style="padding:56px 56px 8px">
-      <h6 style="color:var(--color-accent-700)">Culture</h6>
-      <h1 style="margin-bottom:8px">Off the clock</h1>
-      <p style="max-width:60ch;opacity:0.8">The lighter side of the studio — behind-the-scenes, bloopers and social clips, compiled monthly in the newsletter.</p>
-    </section>
-    <section style="padding:24px 56px 64px">
-      <div data-anim="stagger" style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px">
-        <sc-for list="{{ cultureAll }}" as="post" hint-placeholder-count="8">
-          <div class="card blueprint" style="gap:10px">
-            <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
-            <dc-import name="MediaPlaceholder" label="{{ post.tag }}" ratio="1 / 1" tone="neutral" hint-size="100%,160px"></dc-import>
-            <span class="tag tag-outline" style="width:fit-content">{{ post.platform }}</span>
-            <p class="card-body" style="font-size:12.5px">{{ post.caption }}</p>
-          </div>
-        </sc-for>
-      </div>
     </section>
   </sc-if>
 
@@ -457,11 +362,9 @@ const NAV = [
   { id: "home", label: "Home" },
   { id: "films", label: "Films" },
   { id: "photography", label: "Photography" },
-  { id: "news", label: "News" },
-  { id: "newsletter", label: "Newsletter" },
-  { id: "culture", label: "Culture" },
   { id: "about", label: "About" },
-  { id: "contact", label: "Contact" }
+  { id: "contact", label: "Contact" },
+  { id: "news", label: "News" }
 ];
 
 const HERO_SLIDES = [
@@ -484,28 +387,10 @@ const FILMS = [
 ];
 const FILM_TYPES = ["All", "Narrative", "Documentary", "Commercial", "Music Video"];
 
-const PHOTOS = [
-  { category: "Editorial", ratio: "4 / 5", caption: "Hollow Signal — unit stills, day 2", tag: "EDITORIAL — 4:5" },
-  { category: "Location", ratio: "3 / 2", caption: "Pacific Northwest coastline, dawn", tag: "LOCATION — 3:2" },
-  { category: "Behind the Scenes", ratio: "1 / 1", caption: "Lighting setup, Night Drive shoot", tag: "BTS — 1:1" },
-  { category: "Portrait", ratio: "4 / 5", caption: "Cast portrait, Static & Stone", tag: "PORTRAIT — 4:5" },
-  { category: "Editorial", ratio: "3 / 2", caption: "Nine Rivers — restoration site", tag: "EDITORIAL — 3:2" },
-  { category: "Location", ratio: "4 / 5", caption: "The quarry, off-season", tag: "LOCATION — 4:5" },
-  { category: "Behind the Scenes", ratio: "3 / 2", caption: "Crew lunch, Coastline After", tag: "BTS — 3:2" },
-  { category: "Portrait", ratio: "1 / 1", caption: "Director portrait, on set", tag: "PORTRAIT — 1:1" },
-  { category: "Editorial", ratio: "4 / 5", caption: "Halflight — colour test frame", tag: "EDITORIAL — 4:5" },
-  { category: "Location", ratio: "1 / 1", caption: "Stadium, final season", tag: "LOCATION — 1:1" }
-];
-const PHOTO_CATEGORIES = ["All", "Editorial", "Behind the Scenes", "Location", "Portrait"];
+const PHOTOS = [];
+const PHOTO_CATEGORIES = ["All", "Editorial", "Location", "Portrait"];
 
-const NEWS = [
-  { date: "Jul 2026", pub: "Studio", title: "Astris signs with Meridian Records", excerpt: "A three-picture partnership announced for the 2027 slate, beginning with Night Drive." },
-  { date: "Jun 2026", pub: "Festival", title: "Hollow Signal selected for Camden Shorts", excerpt: "Our latest narrative short premieres in competition this September." },
-  { date: "May 2026", pub: "Press", title: "Coastline, After named a Vimeo Staff Pick", excerpt: "The documentary short is now streaming in full on our Films page." },
-  { date: "Mar 2026", pub: "Studio", title: "Astris opens a second edit bay", excerpt: "Expanded post-production capacity to support a growing commercial slate." },
-  { date: "Jan 2026", pub: "Press", title: "Founder interview: 'Shoot on location, always'", excerpt: "A conversation on documentary method and working independent." },
-  { date: "Nov 2025", pub: "Festival", title: "Nine Rivers wins Best Documentary Short", excerpt: "Recognized at the Lower Basin Environmental Film Festival." }
-];
+const NEWS = [];
 
 const ISSUES = [
   { number: 14, date: "Jun 2026", title: "The Wide Shot", teaser: "Behind the scenes of Night Drive, plus a reading list." },
@@ -730,6 +615,7 @@ class Component extends DCLogic {
       goFilmsClick: e => { e.preventDefault(); this.setPage("films"); },
       goPhotographyClick: e => { e.preventDefault(); this.setPage("photography"); },
       goNewsClick: e => { e.preventDefault(); this.setPage("news"); },
+      goAboutClick: e => { e.preventDefault(); this.setPage("about"); },
       goNewsletterClick: e => { e.preventDefault(); this.setPage("newsletter"); },
       goCultureClick: e => { e.preventDefault(); this.setPage("culture"); },
 
@@ -745,7 +631,8 @@ class Component extends DCLogic {
 
       homeFilms: filmWithHandlers.slice(0, 3),
       homePhotos: photoWithHandlers.slice(0, 4),
-      homeNews: NEWS.slice(0, 3),
+      latestSubmissions: photoWithHandlers.slice(0, 4),
+      homeNews: allNews.slice(0, 3),
       homeCulture: CULTURE.slice(0, 4),
 
       showFilters,
