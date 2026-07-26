@@ -10,31 +10,140 @@ public_folder: "/images/uploads"
 collections:
   - name: "photos"
     label: "Photos"
+    label_singular: "Photo"
     folder: "content/photos"
     create: true
+    sortable_fields: ["date", "title"]
     fields:
       - {label: "Title", name: "title", widget: "string"}
       - {label: "Photo", name: "image", widget: "image"}
-      - {label: "Caption", name: "caption", widget: "text"}
-      - {label: "Project", name: "project", widget: "string"}
-      - {label: "Date", name: "date", widget: "datetime"}
+      - {label: "Caption", name: "caption", widget: "string", required: false}
+      - {label: "Description", name: "description", widget: "text", required: false}
+      - {label: "Story", name: "story", widget: "text", required: false, hint: "The longer story behind the shot — shown on the photo page."}
+      - label: "Series"
+        name: "series"
+        widget: "relation"
+        collection: "series"
+        search_fields: ["title"]
+        value_field: "title"
+        display_fields: ["title"]
+        multiple: true
+        required: false
+      - {label: "Tags", name: "tags", widget: "list", required: false, hint: "Free-form tags, e.g. Canberra, Sunset, Long Exposure."}
+      - {label: "Date Taken", name: "date", widget: "datetime"}
+      - {label: "Camera", name: "camera", widget: "string", required: false}
+      - {label: "Lens", name: "lens", widget: "string", required: false}
+      - {label: "ISO", name: "iso", widget: "string", required: false}
+      - {label: "Aperture", name: "aperture", widget: "string", required: false, hint: "e.g. f/2.8"}
+      - {label: "Shutter Speed", name: "shutter_speed", widget: "string", required: false, hint: "e.g. 1/250s"}
+      - {label: "Focal Length", name: "focal_length", widget: "string", required: false, hint: "e.g. 35mm"}
+      - {label: "Featured (hero banner)", name: "featured", widget: "boolean", default: false, required: false, hint: "Featured photos appear in the homepage banner (max 5) and Selected Work."}
+      - {label: "Banner Order", name: "featured_order", widget: "number", required: false, value_type: "int", hint: "Lower numbers appear first in the banner."}
+      - {label: "Allow Download", name: "download", widget: "boolean", default: false, required: false, hint: "Shows the photo on the Downloads page with a free download button."}
+
+  - name: "series"
+    label: "Series"
+    label_singular: "Series"
+    folder: "content/series"
+    create: true
+    identifier_field: "title"
+    sortable_fields: ["order", "title"]
+    fields:
+      - {label: "Title", name: "title", widget: "string"}
+      - {label: "Order", name: "order", widget: "number", required: false, value_type: "int", hint: "Order of the series chips on the Photography page."}
+      - {label: "Description", name: "description", widget: "text", required: false}
+
   - name: "videos"
-    label: "Videos"
+    label: "Films"
+    label_singular: "Film"
     folder: "content/videos"
     create: true
     fields:
       - {label: "Title", name: "title", widget: "string"}
-      - {label: "Video File", name: "video", widget: "file"}
-      - {label: "Length", name: "length", widget: "string", required: false}
-      - {label: "Type", name: "type", widget: "string", required: false}
+      - {label: "YouTube / Vimeo URL", name: "video_url", widget: "string", required: false, hint: "Paste a YouTube or Vimeo link — preferred over uploading a file."}
+      - {label: "Video File (optional)", name: "video", widget: "file", required: false}
+      - {label: "Thumbnail", name: "thumbnail", widget: "image", required: false, hint: "Optional — YouTube links get a thumbnail automatically."}
+      - {label: "Length", name: "length", widget: "string", required: false, hint: "e.g. 4 min 10s"}
+      - {label: "Type", name: "type", widget: "string", required: false, hint: "e.g. Narrative, Documentary, Commercial, Music Video"}
       - {label: "Date Made", name: "date", widget: "datetime"}
+      - {label: "Description", name: "description", widget: "text", required: false}
       - {label: "Aspect Ratio", name: "aspect_ratio", widget: "string", required: false}
+
   - name: "news"
     label: "News"
+    label_singular: "News post"
     folder: "content/news"
     create: true
     fields:
       - {label: "Title", name: "title", widget: "string"}
       - {label: "Date", name: "date", widget: "datetime"}
-      - {label: "Body", name: "body", widget: "markdown"}
+      - {label: "Summary", name: "summary", widget: "text", required: false, hint: "Short teaser shown on news cards."}
       - {label: "Image", name: "image", widget: "image", required: false}
+      - {label: "Body", name: "body", widget: "markdown"}
+
+  - name: "settings"
+    label: "Site Settings"
+    editor:
+      preview: false
+    files:
+      - label: "Website Text & Hero Banner"
+        name: "site"
+        file: "content/settings/site.yml"
+        fields:
+          - {label: "Brand name", name: "brand", widget: "string", default: "ASTRIS"}
+          - {label: "Tagline", name: "tagline", widget: "string", required: false}
+          - {label: "Hero auto-rotation", name: "hero_autoplay", widget: "boolean", default: true, hint: "Automatically advance the homepage banner."}
+          - {label: "Hero interval (seconds)", name: "hero_interval", widget: "number", default: 6, value_type: "int"}
+          - {label: "Hero button label", name: "hero_cta_label", widget: "string", default: "View photo"}
+          - {label: "Latest photos heading", name: "home_latest_photos_heading", widget: "string", default: "Latest photos"}
+          - {label: "Latest photos link label", name: "home_latest_photos_link", widget: "string", default: "View gallery"}
+          - {label: "Latest films heading", name: "home_latest_films_heading", widget: "string", default: "Latest films"}
+          - {label: "Latest films link label", name: "home_latest_films_link", widget: "string", default: "All films"}
+          - {label: "Selected work heading", name: "home_selected_heading", widget: "string", default: "Selected work"}
+          - {label: "Selected work intro", name: "home_selected_intro", widget: "text", required: false}
+          - {label: "News heading (homepage)", name: "home_news_heading", widget: "string", default: "Latest news"}
+          - {label: "News link label (homepage)", name: "home_news_link", widget: "string", default: "All news"}
+          - {label: "Photography kicker", name: "photography_kicker", widget: "string", default: "Photography"}
+          - {label: "Photography heading", name: "photography_heading", widget: "string", default: "The gallery"}
+          - {label: "Photography intro", name: "photography_intro", widget: "text", required: false}
+          - {label: "Films kicker", name: "films_kicker", widget: "string", default: "Filmography"}
+          - {label: "Films heading", name: "films_heading", widget: "string", default: "Films"}
+          - {label: "Films intro", name: "films_intro", widget: "text", required: false}
+          - {label: "Downloads kicker", name: "downloads_kicker", widget: "string", default: "Free to use"}
+          - {label: "Downloads heading", name: "downloads_heading", widget: "string", default: "Downloads"}
+          - {label: "Downloads intro", name: "downloads_intro", widget: "text", required: false}
+          - {label: "News kicker", name: "news_kicker", widget: "string", default: "Journal"}
+          - {label: "News heading", name: "news_heading", widget: "string", default: "News"}
+          - {label: "News intro", name: "news_intro", widget: "text", required: false}
+          - {label: "Footer text", name: "footer_text", widget: "string", required: false}
+
+      - label: "About Page"
+        name: "about"
+        file: "content/settings/about.yml"
+        fields:
+          - {label: "Kicker", name: "kicker", widget: "string", default: "About"}
+          - {label: "Heading", name: "heading", widget: "string"}
+          - {label: "Intro", name: "intro", widget: "text", required: false}
+          - {label: "Profile image", name: "image", widget: "image", required: false}
+          - {label: "Biography", name: "body", widget: "markdown", required: false}
+          - {label: "Button label", name: "button_label", widget: "string", default: "About me"}
+          - {label: "Homepage heading", name: "home_heading", widget: "string", required: false, hint: "Heading of the About preview on the homepage."}
+          - {label: "Homepage text", name: "home_text", widget: "text", required: false, hint: "Short text of the About preview on the homepage."}
+          - {label: "Capabilities", name: "capabilities", widget: "list", required: false, hint: "Shown as chips on the About page."}
+
+      - label: "Contact Page"
+        name: "contact"
+        file: "content/settings/contact.yml"
+        fields:
+          - {label: "Kicker", name: "kicker", widget: "string", default: "Contact"}
+          - {label: "Heading", name: "heading", widget: "string"}
+          - {label: "Intro", name: "intro", widget: "text", required: false}
+          - {label: "Work email", name: "email", widget: "string"}
+          - {label: "Email note", name: "email_note", widget: "string", required: false}
+          - label: "Social links"
+            name: "socials"
+            widget: "list"
+            required: false
+            fields:
+              - {label: "Label", name: "label", widget: "string"}
+              - {label: "URL", name: "url", widget: "string", required: false}
