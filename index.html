@@ -59,9 +59,15 @@
   .hero-media { animation: heroMediaIn .8s cubic-bezier(.16,1,.3,1) backwards; }
   .hero-media-inner { animation: floatY 7s ease-in-out infinite; }
   .page-in { animation: fadeInUp .5s cubic-bezier(.16,1,.3,1) backwards; }
+
+  .theme-dark { --color-bg:#0c0c08; --color-text:#f4f0e2; --color-divider:#2b2b21; --color-neutral-100:#17170f; --color-neutral-200:#22221a; --color-neutral-300:#343428; }
+  .theme-dark .card { background:#14140d; }
+  .theme-dark .dialog { background:#14140d; }
+  .theme-dark .input { background:#14140d; color:var(--color-text); border-color:var(--color-divider); }
+  .theme-dark .seg { background:#14140d; }
 </style>
 </helmet>
-<div style="min-height:100vh;display:flex;flex-direction:column;background:var(--color-bg);color:var(--color-text);font-family:var(--font-body)">
+<div class="{{ themeClass }}" style="min-height:100vh;display:flex;flex-direction:column;background:var(--color-bg);color:var(--color-text);font-family:var(--font-body)">
 
   <header class="nav" style="border-bottom:1px solid var(--color-divider);position:sticky;top:0;z-index:40;background:color-mix(in srgb, var(--color-bg) 92%, transparent);backdrop-filter:blur(6px);padding-left:28px;padding-right:28px">
     <a href="#" onClick="{{ goHomeClick }}" class="nav-brand" style="display:flex;align-items:center;gap:9px;text-decoration:none;color:var(--color-text)">
@@ -78,34 +84,55 @@
   <main style="flex:1">
 
   <sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
-    <section style="position:relative;overflow:hidden;border-bottom:1px solid var(--color-divider)" onMouseEnter="{{ pauseHero }}" onMouseLeave="{{ resumeHero }}">
-      <div style="display:grid;grid-template-columns:1.05fr 0.95fr;min-height:560px">
-        <div key="{{ heroIndex }}" class="hero-copy" style="padding:64px 56px;display:flex;flex-direction:column;justify-content:center;gap:16px">
-          <span class="tag tag-outline" style="width:fit-content">{{ heroSlide.kicker }}</span>
-          <h1 style="font-size:54px;max-width:14ch">{{ heroSlide.title }}</h1>
-          <p style="max-width:46ch;font-size:16px;opacity:0.85">{{ heroSlide.desc }}</p>
-          <div style="display:flex;gap:12px;margin-top:8px">
-            <a href="#" onClick="{{ heroSlide.ctaClick }}" class="btn btn-primary">{{ heroSlide.cta }}</a>
-            <div style="display:flex;align-items:center;gap:8px;margin-left:8px">
-              <button onClick="{{ prevHero }}" aria-label="Previous" class="btn-icon" style="border:1px solid var(--color-divider);background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M15 18l-6-6 6-6"></path></svg></button>
-              <button onClick="{{ nextHero }}" aria-label="Next" class="btn-icon" style="border:1px solid var(--color-divider);background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 6l6 6-6 6"></path></svg></button>
-            </div>
-          </div>
-          <div style="display:flex;gap:8px;margin-top:14px">
-            <sc-for list="{{ heroDots }}" as="dot" hint-placeholder-count="4">
-              <button onClick="{{ dot.onClick }}" aria-label="Go to slide" style="{{ dot.style }}"></button>
-            </sc-for>
-          </div>
-        </div>
-        <div key="{{ heroIndex }}" class="hero-media" style="height:100%;border-left:1px solid var(--color-divider);overflow:hidden">
-          <div class="hero-media-inner" style="height:100%">
-            <dc-import name="MediaPlaceholder" label="{{ heroSlide.tag }}" ratio="4 / 3" tone="accent" hint-size="100%,100%" style="height:100%"></dc-import>
-          </div>
-        </div>
+    <section style="position:relative;height:74vh;min-height:500px;overflow:hidden;border-bottom:1px solid var(--color-divider)" onMouseEnter="{{ pauseHero }}" onMouseLeave="{{ resumeHero }}">
+      <div key="{{ heroIndex }}" class="hero-media" style="position:absolute;inset:0;background:repeating-linear-gradient(135deg, var(--color-accent-100) 0px, var(--color-accent-100) 12px, var(--color-accent-200) 12px, var(--color-accent-200) 24px)">
+        <sc-if value="{{ heroHasImage }}" hint-placeholder-val="{{ false }}">
+          <img src="{{ heroSlide.image }}" alt="{{ heroSlide.title }}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover" />
+        </sc-if>
+      </div>
+      <div style="position:absolute;inset:0;background:linear-gradient(to bottom, rgba(10,10,6,0.30), rgba(10,10,6,0.55))"></div>
+      <div key="{{ heroIndex }}" class="hero-copy" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:14px;padding:0 96px;color:#FFFDF4">
+        <span class="tag tag-outline" style="width:fit-content;color:#FFFDF4;border-color:rgba(255,253,244,0.55)">{{ heroSlide.kicker }}</span>
+        <h1 style="font-size:56px;max-width:18ch;color:#FFFDF4">{{ heroSlide.title }}</h1>
+        <a href="#" onClick="{{ heroSlide.ctaClick }}" class="btn btn-primary" style="margin-top:10px">{{ heroSlide.cta }}</a>
+      </div>
+      <button onClick="{{ prevHero }}" aria-label="Previous" style="position:absolute;left:14px;top:50%;transform:translateY(-50%);width:42px;height:42px;border-radius:50%;border:1px solid rgba(255,253,244,0.5);background:rgba(10,10,6,0.35);color:#FFFDF4;cursor:pointer;display:flex;align-items:center;justify-content:center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M15 18l-6-6 6-6"></path></svg></button>
+      <button onClick="{{ nextHero }}" aria-label="Next" style="position:absolute;right:14px;top:50%;transform:translateY(-50%);width:42px;height:42px;border-radius:50%;border:1px solid rgba(255,253,244,0.5);background:rgba(10,10,6,0.35);color:#FFFDF4;cursor:pointer;display:flex;align-items:center;justify-content:center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 6l6 6-6 6"></path></svg></button>
+      <div style="position:absolute;bottom:18px;left:50%;transform:translateX(-50%);display:flex;gap:8px">
+        <sc-for list="{{ heroDots }}" as="dot" hint-placeholder-count="4">
+          <button onClick="{{ dot.onClick }}" aria-label="Go to slide" style="{{ dot.style }}"></button>
+        </sc-for>
       </div>
     </section>
 
-    <section style="padding:16px 56px 48px">
+    <section style="padding:64px 56px 48px">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin-bottom:24px">
+        <h2>Latest photos</h2>
+        <a href="#" onClick="{{ goPhotographyClick }}" class="btn btn-ghost">View gallery →</a>
+      </div>
+      <div data-anim="stagger" style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px">
+        <sc-for list="{{ latestSubmissions }}" as="item" hint-placeholder-count="4">
+          <div onClick="{{ item.onClick }}" style="cursor:pointer;display:flex;flex-direction:column;gap:8px">
+            <dc-import name="MediaPlaceholder" label="{{ item.tag }}" ratio="4 / 5" tone="neutral" src="{{ item.image }}" hint-size="100%,180px"></dc-import>
+            <div>
+              <span class="tag tag-outline">{{ item.category }}</span>
+              <p style="font-size:12.5px;margin:6px 0 0;opacity:0.75">{{ item.caption }}</p>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+
+    <section style="margin:0 56px 56px;background:var(--color-accent-900);color:#FFFDF4;padding:52px;display:flex;align-items:center;justify-content:space-between;gap:24px;flex-wrap:wrap">
+      <div style="max-width:44ch">
+        <h6 style="color:var(--color-accent-300);margin-bottom:10px">About</h6>
+        <h2 style="color:#FFFDF4;margin-bottom:6px">Hi — I'm the one-person studio behind Astris.</h2>
+        <p style="opacity:0.75;margin:0">(A short intro will go here — I'll write this bit soon.)</p>
+      </div>
+      <a href="#" onClick="{{ goAboutClick }}" class="btn btn-primary">About me</a>
+    </section>
+
+    <section style="padding:0 56px 64px">
       <div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin-bottom:24px">
         <h2>From the studio</h2>
         <a href="#" onClick="{{ goNewsClick }}" class="btn btn-ghost">Read all news →</a>
@@ -117,33 +144,6 @@
             <span class="card-meta">{{ item.date }} · {{ item.pub }}</span>
             <h3 class="card-title" style="font-size:18px">{{ item.title }}</h3>
             <p class="card-body">{{ item.excerpt }}</p>
-          </div>
-        </sc-for>
-      </div>
-    </section>
-
-    <section style="margin:0 56px 56px;background:var(--color-accent-900);color:var(--color-bg);padding:52px;display:flex;align-items:center;justify-content:space-between;gap:24px;flex-wrap:wrap">
-      <div style="max-width:44ch">
-        <h6 style="color:var(--color-accent-300);margin-bottom:10px">About Astris</h6>
-        <h2 style="color:var(--color-bg);margin-bottom:6px">A small studio, built for the long shot.</h2>
-        <p style="opacity:0.75;margin:0">Astris is an independent film and production studio working across narrative shorts, documentary, commercial and music video.</p>
-      </div>
-      <a href="#" onClick="{{ goAboutClick }}" class="btn btn-primary">About the studio</a>
-    </section>
-
-    <section style="padding:0 56px 64px">
-      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin-bottom:24px">
-        <h2>Latest</h2>
-        <a href="#" onClick="{{ goPhotographyClick }}" class="btn btn-ghost">See more →</a>
-      </div>
-      <div data-anim="stagger" style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px">
-        <sc-for list="{{ latestSubmissions }}" as="item" hint-placeholder-count="4">
-          <div onClick="{{ item.onClick }}" style="cursor:pointer;display:flex;flex-direction:column;gap:8px">
-            <dc-import name="MediaPlaceholder" label="{{ item.tag }}" ratio="4 / 5" tone="neutral" src="{{ item.image }}" hint-size="100%,180px"></dc-import>
-            <div>
-              <span class="tag tag-outline">{{ item.category }}</span>
-              <p style="font-size:12.5px;margin:6px 0 0;opacity:0.75">{{ item.caption }}</p>
-            </div>
           </div>
         </sc-for>
       </div>
@@ -245,24 +245,10 @@
     <section class="page-in" style="padding:56px 56px 24px">
       <h6 style="color:var(--color-accent-700)">About</h6>
       <h1 style="margin-bottom:12px">A small studio, built for the long shot.</h1>
-      <p style="max-width:64ch;opacity:0.8;font-size:16px">Astris is an independent film and production studio working across narrative shorts, documentary, commercial and music video. We shoot on location, cut in-house, and publish a monthly newsletter that shows our work as it's actually made.</p>
+      <p style="max-width:64ch;opacity:0.8;font-size:16px">(This is where my about story will go — I'll write it soon. Astris is a one-person studio: directing, shooting and editing, all me.)</p>
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:20px">
         <sc-for list="{{ capabilities }}" as="cap" hint-placeholder-count="6">
           <span class="tag tag-accent">{{ cap }}</span>
-        </sc-for>
-      </div>
-    </section>
-    <section style="padding:16px 56px 64px">
-      <h2 style="margin-bottom:20px">Team</h2>
-      <div data-anim="stagger" style="display:grid;grid-template-columns:repeat(6,1fr);gap:16px">
-        <sc-for list="{{ team }}" as="member" hint-placeholder-count="6">
-          <div style="display:flex;flex-direction:column;gap:8px">
-            <dc-import name="MediaPlaceholder" label="PORTRAIT — 1:1" ratio="1 / 1" tone="accent" hint-size="100%,140px"></dc-import>
-            <div>
-              <div style="font-family:var(--font-heading);font-weight:600;font-size:15px">{{ member.name }}</div>
-              <div style="font-size:12px;opacity:0.65">{{ member.role }}</div>
-            </div>
-          </div>
         </sc-for>
       </div>
     </section>
@@ -353,6 +339,7 @@
       </div>
     </div>
   </sc-if>
+  <button onClick="{{ toggleTheme }}" aria-label="Toggle light/dark mode" title="Light / dark mode" style="position:fixed;bottom:18px;right:18px;z-index:120;width:42px;height:42px;border-radius:50%;border:1px solid var(--color-divider);background:var(--color-bg);color:var(--color-text);cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 12px rgba(0,0,0,0.18);font-size:17px;line-height:1">{{ themeIcon }}</button>
 
 </div>
 
@@ -446,10 +433,14 @@ class Component extends DCLogic {
     contactSuccess: false,
     cmsPhotos: [],
     cmsVideos: [],
-    cmsNews: []
+    cmsNews: [],
+    darkMode: false
   };
 
   componentDidMount() {
+    try {
+      if (localStorage.getItem("astris-theme") === "dark") this.setState({ darkMode: true });
+    } catch (e) {}
     this._timer = setInterval(() => {
       if (!this.state.heroPaused && !this.state.modal && this.state.page === "home") {
         this.setState(s => ({ heroIndex: (s.heroIndex + 1) % HERO_SLIDES.length }));
@@ -548,6 +539,7 @@ class Component extends DCLogic {
 
     const heroSlideRaw = HERO_SLIDES[heroIndex];
     const heroSlide = { ...heroSlideRaw, ctaClick: e => { e.preventDefault(); this.setPage(heroSlideRaw.page); } };
+    const heroHasImage = !!heroSlideRaw.image;
     const heroDots = HERO_SLIDES.map((s, i) => ({
       onClick: () => this.setState({ heroIndex: i }),
       style: `width:8px;height:8px;border-radius:50%;border:none;cursor:pointer;padding:0;background:${i === heroIndex ? "var(--color-accent)" : "var(--color-neutral-300)"}`
@@ -611,6 +603,14 @@ class Component extends DCLogic {
 
     return {
       navItems,
+      heroHasImage,
+      themeClass: this.state.darkMode ? "theme-dark" : "",
+      themeIcon: this.state.darkMode ? "☀" : "☾",
+      toggleTheme: () => {
+        const next = !this.state.darkMode;
+        this.setState({ darkMode: next });
+        try { localStorage.setItem("astris-theme", next ? "dark" : "light"); } catch (e) {}
+      },
       goHomeClick: e => { e.preventDefault(); this.setPage("home"); },
       goFilmsClick: e => { e.preventDefault(); this.setPage("films"); },
       goPhotographyClick: e => { e.preventDefault(); this.setPage("photography"); },
