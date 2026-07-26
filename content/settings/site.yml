@@ -1,16 +1,42 @@
 brand: ASTRIS
 tagline: Photography & Film
+
+hero_title: Astris
+hero_subtitle: ""
+hero_background: photos
+hero_video: ""
+hero_cta_label: View Project
+hero_cta_destination: auto
 hero_autoplay: true
 hero_interval: 6
-hero_cta_label: View photo
+
+home_photos_enabled: true
+home_photos_order: 1
 home_latest_photos_heading: Latest photos
+home_latest_photos_kicker: Stills
 home_latest_photos_link: View gallery
+
+home_films_enabled: true
+home_films_order: 2
 home_latest_films_heading: Latest films
+home_latest_films_kicker: Motion
 home_latest_films_link: All films
+
+home_selected_enabled: true
+home_selected_order: 3
 home_selected_heading: Selected work
+home_selected_kicker: Curated
 home_selected_intro: A hand-picked set of favourites from across the archive.
+
+home_about_enabled: true
+home_about_order: 4
+
+home_news_enabled: true
+home_news_order: 5
 home_news_heading: Latest news
+home_news_kicker: Journal
 home_news_link: All news
+
 photography_kicker: Photography
 photography_heading: The gallery
 photography_intro: Stills from across the archive — filter by series, tag or camera.
@@ -23,4 +49,14 @@ downloads_intro: Selected photos, free to save and use — no login, free foreve
 news_kicker: Journal
 news_heading: News
 news_intro: Announcements, projects and notes from the studio.
+
+nav_home: Home
+nav_films: Films
+nav_photography: Photography
+nav_downloads: Downloads
+nav_news: News
+nav_about: About
+nav_contact: Contact
+
 footer_text: © 2026 Astris — Josh
+footer_note: ""
