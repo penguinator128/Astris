@@ -17,5 +17,5 @@ shutter_speed: ""
 focal_length: ""
 featured: true
 featured_order: 1
-download: true
+download: false
 ---
