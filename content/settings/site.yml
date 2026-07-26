@@ -3,10 +3,10 @@ tagline: Photography & Film
 hero_title: Astris
 hero_subtitle: ""
 hero_background: photos
-hero_video: "/images/uploads/vlipsy-the-internet-breaking-news-alert-vytypfhr-2.mp4"
+hero_video: ""
 hero_cta_label: View Project
 hero_cta_destination: auto
-hero_autoplay: false
+hero_autoplay: true
 hero_interval: 6
 home_photos_enabled: true
 home_photos_order: 1
