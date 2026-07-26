@@ -60,14 +60,9 @@
   .hero-media-inner { animation: floatY 7s ease-in-out infinite; }
   .page-in { animation: fadeInUp .5s cubic-bezier(.16,1,.3,1) backwards; }
 
-  .theme-dark { --color-bg:#0c0c08; --color-text:#f4f0e2; --color-divider:#2b2b21; --color-neutral-100:#17170f; --color-neutral-200:#22221a; --color-neutral-300:#343428; }
-  .theme-dark .card { background:#14140d; }
-  .theme-dark .dialog { background:#14140d; }
-  .theme-dark .input { background:#14140d; color:var(--color-text); border-color:var(--color-divider); }
-  .theme-dark .seg { background:#14140d; }
 </style>
 </helmet>
-<div class="{{ themeClass }}" style="min-height:100vh;display:flex;flex-direction:column;background:var(--color-bg);color:var(--color-text);font-family:var(--font-body)">
+<div style="min-height:100vh;display:flex;flex-direction:column;background:var(--color-bg);color:var(--color-text);font-family:var(--font-body)">
 
   <header class="nav" style="border-bottom:1px solid var(--color-divider);position:sticky;top:0;z-index:40;background:color-mix(in srgb, var(--color-bg) 92%, transparent);backdrop-filter:blur(6px);padding-left:28px;padding-right:28px">
     <a href="#" onClick="{{ goHomeClick }}" class="nav-brand" style="display:flex;align-items:center;gap:9px;text-decoration:none;color:var(--color-text)">
@@ -112,12 +107,11 @@
       </div>
       <div data-anim="stagger" style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px">
         <sc-for list="{{ latestSubmissions }}" as="item" hint-placeholder-count="4">
-          <div onClick="{{ item.onClick }}" style="cursor:pointer;display:flex;flex-direction:column;gap:8px">
+          <div class="card blueprint elev-sm" onClick="{{ item.onClick }}" style="cursor:pointer;gap:10px">
+            <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
             <dc-import name="MediaPlaceholder" label="{{ item.tag }}" ratio="4 / 5" tone="neutral" src="{{ item.image }}" hint-size="100%,180px"></dc-import>
-            <div>
-              <span class="tag tag-outline">{{ item.category }}</span>
-              <p style="font-size:12.5px;margin:6px 0 0;opacity:0.75">{{ item.caption }}</p>
-            </div>
+            <span class="tag tag-outline" style="width:fit-content">{{ item.category }}</span>
+            <p class="card-body" style="font-size:12.5px">{{ item.caption }}</p>
           </div>
         </sc-for>
       </div>
@@ -134,16 +128,17 @@
 
     <section style="padding:0 56px 64px">
       <div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin-bottom:24px">
-        <h2>From the studio</h2>
-        <a href="#" onClick="{{ goNewsClick }}" class="btn btn-ghost">Read all news →</a>
+        <h2>Latest films</h2>
+        <a href="#" onClick="{{ goFilmsClick }}" class="btn btn-ghost">View all films →</a>
       </div>
       <div data-anim="stagger" style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px">
-        <sc-for list="{{ homeNews }}" as="item" hint-placeholder-count="3">
-          <div class="card blueprint elev-sm" onClick="{{ goNewsClick }}" style="cursor:pointer">
+        <sc-for list="{{ homeFilms }}" as="film" hint-placeholder-count="3">
+          <div class="card blueprint elev-sm" onClick="{{ film.onClick }}" style="cursor:pointer">
             <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
-            <span class="card-meta">{{ item.date }} · {{ item.pub }}</span>
-            <h3 class="card-title" style="font-size:18px">{{ item.title }}</h3>
-            <p class="card-body">{{ item.excerpt }}</p>
+            <dc-import name="MediaPlaceholder" label="{{ film.tag }}" ratio="16 / 9" tone="accent" hint-size="100%,160px"></dc-import>
+            <span class="card-kicker">{{ film.type }}</span>
+            <h3 class="card-title">{{ film.title }}</h3>
+            <span class="card-meta">{{ film.year }} · {{ film.duration }}</span>
           </div>
         </sc-for>
       </div>
@@ -199,16 +194,41 @@
     <section style="padding:0 56px 64px">
       <div data-anim="stagger" style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px">
         <sc-for list="{{ filteredPhotos }}" as="photo" hint-placeholder-count="8">
-          <!-- photo.image (if set by the CMS) is passed through below -->
-          <div onClick="{{ photo.onClick }}" style="cursor:pointer;display:flex;flex-direction:column;gap:8px">
+          <div class="card blueprint elev-sm" onClick="{{ photo.onClick }}" style="cursor:pointer;gap:10px">
+            <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
             <dc-import name="MediaPlaceholder" label="{{ photo.tag }}" ratio="{{ photo.ratio }}" tone="neutral" src="{{ photo.image }}" hint-size="100%,220px"></dc-import>
-            <div>
-              <span class="tag tag-outline">{{ photo.category }}</span>
-              <p style="font-size:12.5px;margin:6px 0 0;opacity:0.75">{{ photo.caption }}</p>
-            </div>
+            <span class="tag tag-outline" style="width:fit-content">{{ photo.category }}</span>
+            <p class="card-body" style="font-size:12.5px">{{ photo.caption }}</p>
           </div>
         </sc-for>
       </div>
+    </section>
+  </sc-if>
+
+  <sc-if value="{{ isDownloads }}" hint-placeholder-val="{{ false }}">
+    <section class="page-in" style="padding:56px 56px 24px">
+      <h6 style="color:var(--color-accent-700)">Free to use</h6>
+      <h1 style="margin-bottom:8px">Downloads</h1>
+      <p style="max-width:60ch;opacity:0.8">Selected photos, free to save and use. Every image here is also part of the main gallery.</p>
+    </section>
+    <section style="padding:0 56px 64px">
+      <sc-if value="{{ hasDownloads }}" hint-placeholder-val="{{ true }}">
+        <div data-anim="stagger" style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px">
+          <sc-for list="{{ downloadablePhotos }}" as="photo" hint-placeholder-count="4">
+            <div class="card blueprint elev-sm" style="gap:10px">
+              <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+              <div onClick="{{ photo.onClick }}" style="cursor:pointer">
+                <dc-import name="MediaPlaceholder" label="{{ photo.tag }}" ratio="{{ photo.ratio }}" tone="neutral" src="{{ photo.image }}" hint-size="100%,200px"></dc-import>
+              </div>
+              <p class="card-body" style="font-size:12.5px">{{ photo.caption }}</p>
+              <a class="btn btn-secondary" href="{{ photo.image }}" download style="width:fit-content">Download</a>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+      <sc-if value="{{ noDownloads }}" hint-placeholder-val="{{ false }}">
+        <p style="opacity:0.7">No downloadable photos yet — check back soon.</p>
+      </sc-if>
     </section>
   </sc-if>
 
@@ -323,23 +343,35 @@
   </footer>
 
   <sc-if value="{{ modalOpen }}" hint-placeholder-val="{{ false }}">
-    <div class="dialog-backdrop" onClick="{{ closeModal }}" style="z-index:100">
-      <div class="dialog" onClick="{{ stopProp }}" style="max-width:640px">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+    <div onClick="{{ stopProp }}" style="position:fixed;inset:0;z-index:100;background:var(--color-bg);overflow:auto">
+      <div class="page-in" style="min-height:100%;padding:36px 56px 56px;display:flex;flex-direction:column;gap:24px">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;border-bottom:1px solid var(--color-divider);padding-bottom:16px">
           <span class="card-kicker">{{ modalKicker }}</span>
-          <button onClick="{{ closeModal }}" class="btn-icon" style="border:none;background:transparent;cursor:pointer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M18 6L6 18M6 6l12 12"></path></svg></button>
+          <button onClick="{{ closeModal }}" class="btn-icon" style="border:1px solid var(--color-divider);background:transparent;cursor:pointer;width:40px;height:40px;display:flex;align-items:center;justify-content:center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M18 6L6 18M6 6l12 12"></path></svg></button>
         </div>
-        <dc-import name="MediaPlaceholder" label="{{ modalTag }}" ratio="{{ modalRatio }}" tone="accent" src="{{ modalImage }}" hint-size="100%,260px"></dc-import>
-        <h3 class="dialog-title">{{ modalTitle }}</h3>
-        <span class="card-meta">{{ modalMeta }}</span>
-        <p class="dialog-body">{{ modalBody }}</p>
-        <div class="dialog-actions">
-          <button class="btn btn-secondary" onClick="{{ closeModal }}">Close</button>
+        <div style="display:grid;grid-template-columns:1.15fr 0.85fr;gap:48px;align-items:start">
+          <div class="card blueprint elev-sm" style="padding:14px">
+            <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+            <dc-import name="MediaPlaceholder" label="{{ modalTag }}" ratio="{{ modalRatio }}" tone="accent" src="{{ modalImage }}" hint-size="100%,420px"></dc-import>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:14px">
+            <h1 style="margin:0">{{ modalTitle }}</h1>
+            <span class="card-meta">{{ modalMeta }}</span>
+            <sc-if value="{{ modalHasCaption }}" hint-placeholder-val="{{ false }}">
+              <p style="font-size:14px;opacity:0.75;margin:0;font-style:italic">{{ modalCaption }}</p>
+            </sc-if>
+            <p class="dialog-body" style="font-size:15px;line-height:1.65">{{ modalBody }}</p>
+            <div style="display:flex;gap:12px;margin-top:8px;flex-wrap:wrap">
+              <sc-if value="{{ modalHasDownload }}" hint-placeholder-val="{{ false }}">
+                <a class="btn btn-primary" href="{{ modalDownloadUrl }}" download>Download photo</a>
+              </sc-if>
+              <button class="btn btn-secondary" onClick="{{ closeModal }}">Close</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
   </sc-if>
-  <button onClick="{{ toggleTheme }}" aria-label="Toggle light/dark mode" title="Light / dark mode" style="position:fixed;bottom:18px;right:18px;z-index:120;width:42px;height:42px;border-radius:50%;border:1px solid var(--color-divider);background:var(--color-bg);color:var(--color-text);cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 12px rgba(0,0,0,0.18);font-size:17px;line-height:1">{{ themeIcon }}</button>
 
 </div>
 
@@ -349,9 +381,10 @@ const NAV = [
   { id: "home", label: "Home" },
   { id: "films", label: "Films" },
   { id: "photography", label: "Photography" },
+  { id: "news", label: "News" },
+  { id: "downloads", label: "Downloads" },
   { id: "about", label: "About" },
-  { id: "contact", label: "Contact" },
-  { id: "news", label: "News" }
+  { id: "contact", label: "Contact" }
 ];
 
 const HERO_SLIDES = [
@@ -433,17 +466,13 @@ class Component extends DCLogic {
     contactSuccess: false,
     cmsPhotos: [],
     cmsVideos: [],
-    cmsNews: [],
-    darkMode: false
+    cmsNews: []
   };
 
   componentDidMount() {
-    try {
-      if (localStorage.getItem("astris-theme") === "dark") this.setState({ darkMode: true });
-    } catch (e) {}
     this._timer = setInterval(() => {
       if (!this.state.heroPaused && !this.state.modal && this.state.page === "home") {
-        this.setState(s => ({ heroIndex: (s.heroIndex + 1) % HERO_SLIDES.length }));
+        this.setState(s => ({ heroIndex: (s.heroIndex + 1) % (this._heroCount || HERO_SLIDES.length) }));
       }
     }, (this.props.heroAutoplaySeconds ?? 6) * 1000);
     this.loadCmsContent();
@@ -537,24 +566,16 @@ class Component extends DCLogic {
         : "color:inherit;text-decoration:none"
     }));
 
-    const heroSlideRaw = HERO_SLIDES[heroIndex];
-    const heroSlide = { ...heroSlideRaw, ctaClick: e => { e.preventDefault(); this.setPage(heroSlideRaw.page); } };
-    const heroHasImage = !!heroSlideRaw.image;
-    const heroDots = HERO_SLIDES.map((s, i) => ({
-      onClick: () => this.setState({ heroIndex: i }),
-      style: `width:8px;height:8px;border-radius:50%;border:none;cursor:pointer;padding:0;background:${i === heroIndex ? "var(--color-accent)" : "var(--color-neutral-300)"}`
-    }));
-
-    const filmWithHandlers = FILMS.map(f => ({ ...f, onClick: () => this.openModal("film", f) }));
-    const filteredFilms = filmFilter === "All" ? filmWithHandlers : filmWithHandlers.filter(f => f.type === filmFilter);
-    const filmFilterOptions = FILM_TYPES.map(t => ({
-      label: t, checked: t === filmFilter, onChange: () => this.setState({ filmFilter: t })
-    }));
-
     const cmsPhotosNormalized = (this.state.cmsPhotos || []).map(p => ({
       category: p.project || "New",
       ratio: "4 / 5",
       caption: p.caption || p.title || "",
+      title: p.title || "",
+      description: p.description || p.body || "",
+      project: p.project || "",
+      date: p.date || "",
+      downloadable: p.downloadable === true || p.downloadable === "true",
+      featured: p.featured === true || p.featured === "true",
       tag: (p.title || "PHOTO").toUpperCase(),
       image: p.image || ""
     }));
@@ -563,10 +584,32 @@ class Component extends DCLogic {
     const photoFilterOptions = PHOTO_CATEGORIES.map(c => ({
       label: c, checked: c === photoFilter, onChange: () => this.setState({ photoFilter: c })
     }));
+    const downloadablePhotos = photoWithHandlers.filter(p => p.downloadable);
+    const hasDownloads = downloadablePhotos.length > 0;
+
+    const featuredPhotos = cmsPhotosNormalized.filter(p => p.featured).slice(0, 5);
+    const heroSlides = featuredPhotos.length
+      ? featuredPhotos.map(p => ({ kicker: p.category || "Featured", title: p.title || p.caption, cta: "View photo", image: p.image, _photo: p }))
+      : HERO_SLIDES;
+    this._heroCount = heroSlides.length;
+    const safeHeroIndex = heroIndex % heroSlides.length;
+    const heroSlideRaw = heroSlides[safeHeroIndex];
+    const heroSlide = { ...heroSlideRaw, ctaClick: e => { e.preventDefault(); if (heroSlideRaw._photo) this.openModal("photo", heroSlideRaw._photo); else this.setPage(heroSlideRaw.page); } };
+    const heroHasImage = !!heroSlideRaw.image;
+    const heroDots = heroSlides.map((s, i) => ({
+      onClick: () => this.setState({ heroIndex: i }),
+      style: `width:8px;height:8px;border-radius:50%;border:none;cursor:pointer;padding:0;background:${i === safeHeroIndex ? "var(--color-accent)" : "var(--color-neutral-300)"}`
+    }));
+
+    const filmWithHandlers = FILMS.map(f => ({ ...f, onClick: () => this.openModal("film", f) }));
+    const filteredFilms = filmFilter === "All" ? filmWithHandlers : filmWithHandlers.filter(f => f.type === filmFilter);
+    const filmFilterOptions = FILM_TYPES.map(t => ({
+      label: t, checked: t === filmFilter, onChange: () => this.setState({ filmFilter: t })
+    }));
 
     const issuesWithHandlers = ISSUES.map(i => ({ ...i, onClick: () => this.openModal("issue", i) }));
 
-    let modalOpen = false, modalKicker = "", modalTitle = "", modalMeta = "", modalBody = "", modalTag = "", modalRatio = "16 / 9", modalImage = "";
+    let modalOpen = false, modalKicker = "", modalTitle = "", modalMeta = "", modalBody = "", modalTag = "", modalRatio = "16 / 9", modalImage = "", modalCaption = "", modalDownloadUrl = "";
     if (modal) {
       modalOpen = true;
       if (modal.kind === "film") {
@@ -575,10 +618,12 @@ class Component extends DCLogic {
         modalBody = modal.item.synopsis + " Full credits and screening details available on request.";
         modalTag = modal.item.tag; modalRatio = "16 / 9";
       } else if (modal.kind === "photo") {
-        modalKicker = modal.item.category; modalTitle = modal.item.caption;
-        modalMeta = "Astris Studio";
-        modalBody = "Shot on location as part of the Astris photography archive. Prints and licensing available on request.";
+        modalKicker = modal.item.project || modal.item.category; modalTitle = modal.item.title || modal.item.caption;
+        modalMeta = modal.item.date ? new Date(modal.item.date).toLocaleDateString("en-US", { day: "numeric", month: "long", year: "numeric" }) : "Astris";
+        modalCaption = modal.item.caption || "";
+        modalBody = modal.item.description || "";
         modalTag = modal.item.tag; modalRatio = modal.item.ratio; modalImage = modal.item.image || "";
+        modalDownloadUrl = modal.item.downloadable ? (modal.item.image || "") : "";
       } else if (modal.kind === "issue") {
         modalKicker = "Issue " + modal.item.number; modalTitle = modal.item.title;
         modalMeta = modal.item.date;
@@ -604,13 +649,6 @@ class Component extends DCLogic {
     return {
       navItems,
       heroHasImage,
-      themeClass: this.state.darkMode ? "theme-dark" : "",
-      themeIcon: this.state.darkMode ? "☀" : "☾",
-      toggleTheme: () => {
-        const next = !this.state.darkMode;
-        this.setState({ darkMode: next });
-        try { localStorage.setItem("astris-theme", next ? "dark" : "light"); } catch (e) {}
-      },
       goHomeClick: e => { e.preventDefault(); this.setPage("home"); },
       goFilmsClick: e => { e.preventDefault(); this.setPage("films"); },
       goPhotographyClick: e => { e.preventDefault(); this.setPage("photography"); },
@@ -620,14 +658,14 @@ class Component extends DCLogic {
       goCultureClick: e => { e.preventDefault(); this.setPage("culture"); },
 
       isHome: page === "home", isFilms: page === "films", isPhotography: page === "photography",
-      isNews: page === "news", isNewsletter: page === "newsletter", isCulture: page === "culture",
+      isNews: page === "news", isDownloads: page === "downloads", isNewsletter: page === "newsletter", isCulture: page === "culture",
       isAbout: page === "about", isContact: page === "contact",
 
       heroSlide, heroDots,
       pauseHero: () => this.setState({ heroPaused: true }),
       resumeHero: () => this.setState({ heroPaused: false }),
-      prevHero: () => this.setState(s => ({ heroIndex: (s.heroIndex - 1 + HERO_SLIDES.length) % HERO_SLIDES.length })),
-      nextHero: () => this.setState(s => ({ heroIndex: (s.heroIndex + 1) % HERO_SLIDES.length })),
+      prevHero: () => this.setState(s => { const n = this._heroCount || HERO_SLIDES.length; return { heroIndex: (s.heroIndex - 1 + n) % n }; }),
+      nextHero: () => this.setState(s => { const n = this._heroCount || HERO_SLIDES.length; return { heroIndex: (s.heroIndex + 1) % n }; }),
 
       homeFilms: filmWithHandlers.slice(0, 3),
       homePhotos: photoWithHandlers.slice(0, 4),
@@ -667,7 +705,8 @@ class Component extends DCLogic {
       onContactMessageChange: e => this.setState({ contactMessage: e.target.value }),
       onContactSubmit: e => this.onContactSubmit(e),
 
-      modalOpen, modalKicker, modalTitle, modalMeta, modalBody, modalTag, modalRatio, modalImage,
+      modalOpen, modalKicker, modalTitle, modalMeta, modalBody, modalTag, modalRatio, modalImage, modalCaption, modalDownloadUrl, modalHasDownload: !!modalDownloadUrl, modalHasCaption: !!modalCaption,
+      downloadablePhotos, hasDownloads, noDownloads: !hasDownloads,
       closeModal: () => this.closeModal(),
       stopProp: e => this.stopProp(e)
     };
