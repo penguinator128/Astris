@@ -6,7 +6,7 @@ hero_background: photos
 hero_video: ""
 hero_cta_label: View Project
 hero_cta_destination: auto
-hero_autoplay: true
+hero_autoplay: false
 hero_interval: 6
 home_photos_enabled: true
 home_photos_order: 1
