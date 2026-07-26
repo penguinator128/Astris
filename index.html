@@ -4,7 +4,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="./support.js"></script>
-<script src="https://unpkg.com/js-yaml@4.1.0/dist/js-yaml.umd.min.js"></script>
 </head>
 <body>
 <x-dc>
@@ -578,18 +577,22 @@ class Component extends DCLogic {
   }
 
   parseCmsFile(text) {
-    if (!window.jsyaml) {
-      console.error("jsyaml library not loaded — CMS content cannot be parsed");
-      return {};
-    }
-    const fm = text.match(/^---\s*\n([\s\S]*?)\n---\s*\n?([\s\S]*)$/);
     try {
-      if (fm) {
-        const data = window.jsyaml.load(fm[1]) || {};
-        data.body = (fm[2] || "").trim();
-        return data;
-      }
-      return window.jsyaml.load(text) || {};
+      const fm = text.match(/^---\s*\n([\s\S]*?)\n---\s*\n?([\s\S]*)$/);
+      const yamlBlock = fm ? fm[1] : text;
+      const body = fm ? (fm[2] || "").trim() : "";
+      const data = {};
+      yamlBlock.split("\n").forEach(line => {
+        const m = line.match(/^([A-Za-z0-9_]+):\s*(.*)$/);
+        if (!m) return;
+        let val = m[2].trim();
+        if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+          val = val.slice(1, -1);
+        }
+        data[m[1]] = val;
+      });
+      data.body = body;
+      return data;
     } catch (e) {
       console.error("Could not parse CMS file", e);
       return {};
