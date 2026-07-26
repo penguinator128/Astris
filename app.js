@@ -1,7 +1,7 @@
 /* ============================================================
-   ASTRIS — portfolio app (v2)
-   Content is loaded from the GitHub repo (committed by the CMS
-   at /admin) and rendered client-side with hash routing.
+   ASTRIS — portfolio app (v3)
+   Content lives in the GitHub repo (committed by Astris Studio)
+   and is rendered client-side with hash routing.
    ============================================================ */
 (() => {
 "use strict";
@@ -9,17 +9,17 @@
 const REPO = "penguinator128/Astris";
 const BRANCH = "main";
 const RAW = `https://raw.githubusercontent.com/${REPO}/${BRANCH}/`;
-const CACHE_KEY = "astris_content_v2";
+const CACHE_KEY = "astris_content_v3";
 const CACHE_TTL = 5 * 60 * 1000;
 
 const NAV = [
-  { id: "", label: "Home" },
-  { id: "films", label: "Films" },
-  { id: "photography", label: "Photography" },
-  { id: "downloads", label: "Downloads" },
-  { id: "news", label: "News" },
-  { id: "about", label: "About" },
-  { id: "contact", label: "Contact" }
+  { id: "", label: "Home", key: "nav_home" },
+  { id: "films", label: "Films", key: "nav_films" },
+  { id: "photography", label: "Photography", key: "nav_photography" },
+  { id: "downloads", label: "Downloads", key: "nav_downloads" },
+  { id: "news", label: "News", key: "nav_news" },
+  { id: "about", label: "About", key: "nav_about" },
+  { id: "contact", label: "Contact", key: "nav_contact" }
 ];
 
 const D = {
@@ -34,7 +34,9 @@ const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
 const esc = s => String(s == null ? "" : s)
   .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
   .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-const attr = s => esc(s);
+const attr = esc;
+const truthy = v => v === true || v === "true";
+const enabled = (v) => v !== false && v !== "false";
 
 function fmtDate(d, opts) {
   if (!d) return "";
@@ -43,11 +45,7 @@ function fmtDate(d, opts) {
   return dt.toLocaleDateString("en-AU", opts || { day: "numeric", month: "long", year: "numeric" });
 }
 
-/* ---------------- tiny YAML front-matter parser ----------------
-   Handles the subset Decap CMS and the Studio admin emit:
-   scalars, quoted strings, booleans, numbers, block lists
-   (scalar items and small objects), inline [a, b] lists and
-   folded/literal block scalars (>-, |). */
+/* ---------------- YAML front-matter parser ---------------- */
 function parseYAML(src) {
   const out = {};
   const lines = src.replace(/\r/g, "").split("\n");
@@ -55,10 +53,10 @@ function parseYAML(src) {
   const unquote = v => {
     v = v.trim();
     if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'")))
-      return v.slice(1, -1);
+      return v.slice(1, -1).replace(/\\"/g, '"');
     if (v === "true") return true;
     if (v === "false") return false;
-    if (v !== "" && !isNaN(v) && /^-?\d+(\.\d+)?$/.test(v)) return Number(v);
+    if (v !== "" && /^-?\d+(\.\d+)?$/.test(v)) return Number(v);
     return v;
   };
   while (i < lines.length) {
@@ -70,7 +68,6 @@ function parseYAML(src) {
     let val = m[2];
 
     if (val === "" || val == null) {
-      // possible block list / nested structure
       const items = [];
       let j = i + 1;
       while (j < lines.length) {
@@ -81,7 +78,6 @@ function parseYAML(src) {
         const rest = im[1];
         const om = rest.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
         if (om) {
-          // object item: collect following indented key: value lines
           const obj = {}; obj[om[1]] = unquote(om[2]);
           const baseIndent = l.match(/^\s*/)[0].length;
           j++;
@@ -107,7 +103,6 @@ function parseYAML(src) {
     }
 
     if (/^[>|]/.test(val)) {
-      // folded / literal block scalar
       const buf = [];
       let j = i + 1;
       while (j < lines.length) {
@@ -141,7 +136,7 @@ function parseFrontMatter(text) {
   return { data, body: data.body };
 }
 
-/* ---------------- tiny markdown renderer ---------------- */
+/* ---------------- markdown ---------------- */
 function md(src) {
   if (!src) return "";
   const blocks = String(src).replace(/\r/g, "").split(/\n{2,}/);
@@ -239,20 +234,22 @@ function applyContent(raw) {
       date: date && !isNaN(date) ? date : null,
       camera: p.camera || "",
       lens: p.lens || "",
-      iso: p.iso || "",
+      iso: p.iso === 0 ? "" : String(p.iso || ""),
       aperture: p.aperture || "",
       shutter: p.shutter_speed || "",
       focal: p.focal_length || "",
-      featured: p.featured === true,
+      featured: truthy(p.featured),
       featuredOrder: Number(p.featured_order) || 999,
-      download: p.download === true || p.downloadable === true
+      download: truthy(p.download) || truthy(p.downloadable)
     };
   }).filter(p => p.image).sort((a, b) => (b.date || 0) - (a.date || 0));
 
   D.films = (raw.videos || []).map(v => {
-    const url = v.video_url || "";
+    const url = String(v.video_url || "");
     const yt = url.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/)([A-Za-z0-9_-]{6,})/);
     const vm = url.match(/vimeo\.com\/(\d+)/);
+    const date = v.date ? new Date(v.date) : null;
+    const validDate = date && !isNaN(date) ? date : null;
     return {
       slug: v._slug,
       title: v.title || "",
@@ -263,8 +260,11 @@ function applyContent(raw) {
       thumb: v.thumbnail || (yt ? `https://i.ytimg.com/vi/${yt[1]}/hqdefault.jpg` : ""),
       length: v.length || "",
       type: v.type || "",
-      date: v.date ? new Date(v.date) : null,
-      description: v.description || v.body || ""
+      year: v.year ? String(v.year) : (validDate ? String(validDate.getFullYear()) : ""),
+      date: validDate,
+      description: v.description || v.body || "",
+      featured: truthy(v.featured),
+      featuredOrder: Number(v.featured_order) || 999
     };
   }).sort((a, b) => (b.date || 0) - (a.date || 0));
 
@@ -279,6 +279,7 @@ function applyContent(raw) {
 
   D.ready = true;
   D.error = null;
+  buildShell();
   render();
 }
 
@@ -290,17 +291,18 @@ function parseHash() {
   const params = new URLSearchParams(queryPart || "");
   return { page: segs[0] || "", arg: segs.slice(1).join("/"), params };
 }
-
 function go(hash) { location.hash = hash; }
 
 let filmModalEl = null;
+let heroCleanup = null;
 
 function render() {
   closeFilmModal();
+  if (heroCleanup) { heroCleanup(); heroCleanup = null; }
   const app = $("#app");
   const route = parseHash();
   setNavActive(route.page);
-  window.scrollTo({ top: 0, behavior: "instant" in window ? "instant" : "auto" });
+  window.scrollTo({ top: 0 });
 
   if (!D.ready) { app.innerHTML = loaderHTML(); return; }
   if (D.error && !D.photos.length) {
@@ -349,17 +351,19 @@ function photoCard(p, opts = {}) {
 }
 
 function filmCard(f) {
-  const meta = [f.date ? f.date.getFullYear() : "", f.length].filter(Boolean).join(" · ");
   return `<div class="film-card" data-film="${attr(f.slug)}">
     <div class="film-thumb">
       ${f.thumb
         ? `<img data-lazy src="${attr(f.thumb)}" alt="${attr(f.title)}" loading="lazy" decoding="async">`
-        : `<div style="position:absolute;inset:0;background:linear-gradient(135deg,var(--surface) 0%,var(--surface-2) 100%)"></div>`}
+        : `<div class="film-thumb-blank"></div>`}
+      ${f.type ? `<span class="film-badge">${esc(f.type)}</span>` : ""}
       <span class="play"><span>${iconPlay(20)}</span></span>
     </div>
-    ${f.type ? `<span class="film-kicker">${esc(f.type)}</span>` : ""}
-    <span class="film-title">${esc(f.title)}</span>
-    ${meta ? `<span class="film-meta">${esc(meta)}</span>` : ""}
+    <div class="film-row">
+      <span class="film-title">${esc(f.title)}</span>
+      ${f.year ? `<span class="film-year">${esc(f.year)}</span>` : ""}
+    </div>
+    ${f.length || f.description ? `<span class="film-meta">${esc(f.length || f.description.slice(0, 80))}</span>` : ""}
   </div>`;
 }
 
@@ -382,87 +386,182 @@ const iconChevR = s => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill
 /* ---------------- HOME ---------------- */
 function renderHome(app) {
   const s = D.site;
-  const featured = D.photos.filter(p => p.featured).sort((a, b) => a.featuredOrder - b.featuredOrder).slice(0, 5);
-  const latest = D.photos.slice(0, 4);
-  const films = D.films.slice(0, 3);
-  const selected = D.photos.filter(p => p.featured).sort((a, b) => a.featuredOrder - b.featuredOrder).slice(0, 6);
-  const news = D.news.slice(0, 3);
-  const about = D.about;
+  const slides = buildHeroSlides();
 
-  app.innerHTML = `<div class="page">
-    ${heroHTML(featured)}
+  const sections = [
+    {
+      key: "photos",
+      order: Number(s.home_photos_order) || 1,
+      on: enabled(s.home_photos_enabled),
+      html: () => {
+        const latest = D.photos.slice(0, 4);
+        if (!latest.length) return "";
+        return sectionHTML({
+          kicker: s.home_latest_photos_kicker || "Stills",
+          heading: s.home_latest_photos_heading || "Latest photos",
+          link: { href: "#/photography", label: s.home_latest_photos_link || "View gallery" },
+          body: `<div class="grid-photos grid-anim">${latest.map(p => photoCard(p)).join("")}</div>`
+        });
+      }
+    },
+    {
+      key: "films",
+      order: Number(s.home_films_order) || 2,
+      on: enabled(s.home_films_enabled),
+      html: () => {
+        const films = D.films.slice(0, 3);
+        if (!films.length) return "";
+        return sectionHTML({
+          kicker: s.home_latest_films_kicker || "Motion",
+          heading: s.home_latest_films_heading || "Latest films",
+          link: { href: "#/films", label: s.home_latest_films_link || "All films" },
+          body: `<div class="grid-films grid-anim">${films.map(f => filmCard(f)).join("")}</div>`
+        });
+      }
+    },
+    {
+      key: "selected",
+      order: Number(s.home_selected_order) || 3,
+      on: enabled(s.home_selected_enabled),
+      html: () => {
+        const selected = D.photos.filter(p => p.featured)
+          .sort((a, b) => a.featuredOrder - b.featuredOrder).slice(0, 6);
+        if (!selected.length) return "";
+        return sectionHTML({
+          kicker: s.home_selected_kicker || "Curated",
+          heading: s.home_selected_heading || "Selected work",
+          intro: s.home_selected_intro,
+          body: `<div class="masonry grid-anim">${selected.map(p => photoCard(p, { masonry: true })).join("")}</div>`
+        });
+      }
+    },
+    {
+      key: "about",
+      order: Number(s.home_about_order) || 4,
+      on: enabled(s.home_about_enabled),
+      html: () => {
+        const a = D.about;
+        return `<section class="about-band" data-reveal>
+          <div style="max-width:52ch">
+            <span class="kicker">${esc(a.kicker || "About")}</span>
+            <h2 style="margin:10px 0 8px">${esc(a.home_heading || a.heading || "About Astris")}</h2>
+            <p class="dim">${esc(a.home_text || a.intro || "")}</p>
+          </div>
+          <a class="btn btn-primary" href="#/about">Read more</a>
+        </section>`;
+      }
+    },
+    {
+      key: "news",
+      order: Number(s.home_news_order) || 5,
+      on: enabled(s.home_news_enabled),
+      html: () => {
+        const news = D.news.slice(0, 3);
+        if (!news.length) return "";
+        return sectionHTML({
+          kicker: s.home_news_kicker || "Journal",
+          heading: s.home_news_heading || "Latest news",
+          link: { href: "#/news", label: s.home_news_link || "All news" },
+          body: `<div class="grid-news grid-anim">${news.map(n => newsCard(n)).join("")}</div>`
+        });
+      }
+    }
+  ];
 
-    <section class="section" data-reveal>
-      <div class="section-head">
-        <div><span class="kicker">Stills</span><h2>${esc(s.home_latest_photos_heading || "Latest photos")}</h2></div>
-        <a class="btn-link" href="#/photography">${esc(s.home_latest_photos_link || "View gallery")} ${iconArrow(15)}</a>
-      </div>
-      ${latest.length
-        ? `<div class="grid-photos grid-anim">${latest.map(p => photoCard(p)).join("")}</div>`
-        : `<p class="empty-note">Photos are coming soon.</p>`}
-    </section>
+  const body = sections.filter(x => x.on).sort((a, b) => a.order - b.order)
+    .map(x => x.html()).join("");
 
-    ${films.length ? `<section class="section" data-reveal>
-      <div class="section-head">
-        <div><span class="kicker">Motion</span><h2>${esc(s.home_latest_films_heading || "Latest films")}</h2></div>
-        <a class="btn-link" href="#/films">${esc(s.home_latest_films_link || "All films")} ${iconArrow(15)}</a>
-      </div>
-      <div class="grid-films grid-anim">${films.map(f => filmCard(f)).join("")}</div>
-    </section>` : ""}
-
-    ${selected.length ? `<section class="section" data-reveal>
-      <div class="section-head">
-        <div><span class="kicker">Curated</span><h2>${esc(s.home_selected_heading || "Selected work")}</h2>
-        <p class="sub">${esc(s.home_selected_intro || "")}</p></div>
-      </div>
-      <div class="masonry grid-anim">${selected.map(p => photoCard(p, { masonry: true })).join("")}</div>
-    </section>` : ""}
-
-    <section class="about-band" data-reveal>
-      <div style="max-width:52ch">
-        <span class="kicker">${esc(about.kicker || "About")}</span>
-        <h2 style="margin:10px 0 8px">${esc(about.home_heading || about.heading || "About Astris")}</h2>
-        <p class="dim">${esc(about.home_text || about.intro || "")}</p>
-      </div>
-      <a class="btn btn-primary" href="#/about">${esc(about.button_label || "Read more")}</a>
-    </section>
-
-    ${news.length ? `<section class="section" data-reveal style="padding-top:0">
-      <div class="section-head">
-        <div><span class="kicker">Journal</span><h2>${esc(s.home_news_heading || "Latest news")}</h2></div>
-        <a class="btn-link" href="#/news">${esc(s.home_news_link || "All news")} ${iconArrow(15)}</a>
-      </div>
-      <div class="grid-news grid-anim">${news.map(n => newsCard(n)).join("")}</div>
-    </section>` : ""}
-  </div>`;
-
-  initHero(app, featured);
+  app.innerHTML = `<div class="page">${heroHTML(slides)}${body}</div>`;
+  initHero(app, slides);
   bindFilmCards(app);
 }
 
-/* ---------------- HERO BANNER ---------------- */
-function heroHTML(slides) {
-  if (!slides.length) {
-    return `<section class="hero" style="display:flex;align-items:center;justify-content:center">
-      <div class="hero-copy" style="position:relative;inset:auto">
-        <span class="kicker">${esc(D.site.tagline || "Photography & Film")}</span>
-        <h1 class="hero-title" style="color:var(--text)">${esc(D.site.brand || "ASTRIS")}</h1>
-      </div></section>`;
-  }
-  const slideHTML = p => `<div class="hero-slide">
-    <img src="${attr(p.image)}" alt="${attr(p.title)}" draggable="false">
-    <div class="hero-copy">
-      <span class="hero-kicker">${esc(p.series[0] || "Featured")}</span>
-      <h1 class="hero-title">${esc(p.title || p.caption)}</h1>
-      <a class="btn btn-primary hero-cta" href="#/photo/${attr(p.slug)}">${esc(D.site.hero_cta_label || "View photo")}</a>
+function sectionHTML({ kicker, heading, intro, link, body }) {
+  return `<section class="section" data-reveal>
+    <div class="section-head">
+      <div>
+        ${kicker ? `<span class="kicker">${esc(kicker)}</span>` : ""}
+        <h2>${esc(heading)}</h2>
+        ${intro ? `<p class="sub">${esc(intro)}</p>` : ""}
+      </div>
+      ${link ? `<a class="btn-link" href="${attr(link.href)}">${esc(link.label)} ${iconArrow(15)}</a>` : ""}
     </div>
-  </div>`;
+    ${body}
+  </section>`;
+}
+
+/* ---------------- HERO ---------------- */
+function buildHeroSlides() {
+  const s = D.site;
+  const mode = String(s.hero_background || "photos").toLowerCase();
+  const wantPhotos = mode !== "videos" && mode !== "video";
+  const wantVideos = mode === "videos" || mode === "video" || mode === "both";
+  const slides = [];
+
+  if (s.hero_video) {
+    slides.push({
+      kind: "video", src: s.hero_video, poster: "",
+      title: s.hero_showreel_title || "Showreel",
+      href: "#/films", film: null
+    });
+  }
+  if (wantPhotos) {
+    D.photos.filter(p => p.featured)
+      .sort((a, b) => a.featuredOrder - b.featuredOrder)
+      .slice(0, 5)
+      .forEach(p => slides.push({
+        kind: "photo", src: p.image,
+        title: p.title || p.caption, href: "#/photo/" + p.slug
+      }));
+  }
+  if (wantVideos) {
+    D.films.filter(f => f.featured)
+      .sort((a, b) => a.featuredOrder - b.featuredOrder)
+      .slice(0, 5)
+      .forEach(f => slides.push({
+        kind: f.file ? "video" : "photo",
+        src: f.file || f.thumb,
+        poster: f.thumb,
+        title: f.title, href: "#/films", film: f
+      }));
+  }
+  return slides.filter(x => x.src).slice(0, 8);
+}
+
+function heroHTML(slides) {
+  const s = D.site;
+  const title = s.hero_title || s.brand || "Astris";
+  const sub = s.hero_subtitle || "";
   const many = slides.length > 1;
-  const track = many
-    ? [slides[slides.length - 1], ...slides, slides[0]].map(slideHTML).join("")
-    : slideHTML(slides[0]);
-  return `<section class="hero" id="hero">
+
+  const slideMedia = sl => sl.kind === "video"
+    ? `<video class="hero-video" src="${attr(sl.src)}" ${sl.poster ? `poster="${attr(sl.poster)}"` : ""} muted loop playsinline preload="metadata"></video>`
+    : `<img src="${attr(sl.src)}" alt="" draggable="false">`;
+  const slideHTML = sl => `<div class="hero-slide">${slideMedia(sl)}</div>`;
+
+  const track = !slides.length
+    ? `<div class="hero-slide hero-slide-empty"></div>`
+    : many
+      ? [slides[slides.length - 1], ...slides, slides[0]].map(slideHTML).join("")
+      : slideHTML(slides[0]);
+
+  return `<section class="hero ${slides.length ? "" : "hero-bare"}" id="hero">
     <div class="hero-track no-anim" id="heroTrack">${track}</div>
+    <div class="hero-veil"></div>
+
+    <div class="hero-center">
+      <h1 class="hero-wordmark">${esc(title)}</h1>
+      ${sub ? `<p class="hero-sub">${esc(sub)}</p>` : ""}
+    </div>
+
+    ${slides.length ? `<div class="hero-card" id="heroCard">
+      <div class="hero-card-text">
+        <span class="hero-card-label">Featured project</span>
+        <span class="hero-card-title" id="heroCardTitle"></span>
+      </div>
+      <a class="btn btn-primary hero-card-cta" id="heroCardCta" href="#">${esc(s.hero_cta_label || "View Project")}</a>
+    </div>` : ""}
+
     ${many ? `
       <button class="hero-arrow prev" id="heroPrev" aria-label="Previous slide">${iconChevL(20)}</button>
       <button class="hero-arrow next" id="heroNext" aria-label="Next slide">${iconChevR(20)}</button>
@@ -473,56 +572,88 @@ function heroHTML(slides) {
 
 function initHero(root, slides) {
   const hero = $("#hero", root);
-  if (!hero || slides.length === 0) return;
+  if (!hero || !slides.length) return;
   const track = $("#heroTrack", hero);
+  const card = $("#heroCard", hero);
+  const cardTitle = $("#heroCardTitle", hero);
+  const cardCta = $("#heroCardCta", hero);
   const n = slides.length;
-  const autoplay = D.site.hero_autoplay !== false;
-  const interval = Math.max(3, Number(D.site.hero_interval) || 6) * 1000;
+  const s = D.site;
+  const dest = String(s.hero_cta_destination || "auto").toLowerCase();
+  const autoplay = enabled(s.hero_autoplay);
+  const interval = Math.max(3, Number(s.hero_interval) || 6) * 1000;
   hero.style.setProperty("--hero-interval", interval + "ms");
 
-  let idx = 1;             // position in track incl. clones
+  const slideEls = $$(".hero-slide", track);
+  let idx = n > 1 ? 1 : 0;
   let timer = null;
   let animating = false;
 
-  const slideEls = $$(".hero-slide", track);
+  const realIndex = () => n > 1 ? ((idx - 1) % n + n) % n : 0;
+
+  const playCurrentVideo = () => {
+    slideEls.forEach(el => {
+      const v = $("video", el);
+      if (!v) return;
+      if (el.classList.contains("current")) { v.play().catch(() => {}); }
+      else { v.pause(); }
+    });
+  };
+
+  const updateCard = () => {
+    const sl = slides[realIndex()];
+    if (!sl || !card) return;
+    card.classList.remove("in");
+    // force reflow so the entrance animation replays on every slide change
+    void card.offsetWidth;
+    cardTitle.textContent = sl.title || "";
+    cardCta.setAttribute("href", dest === "auto" || !dest ? (sl.href || "#") : "#/" + dest.replace(/^#\/?/, ""));
+    cardCta.onclick = e => {
+      if (sl.film && (sl.film.yt || sl.film.vimeo || sl.film.file) && (dest === "auto" || !dest)) {
+        e.preventDefault();
+        openFilmModal(sl.film);
+      }
+    };
+    card.classList.add("in");
+  };
+
   const markCurrent = () => {
     slideEls.forEach((el, i) => el.classList.toggle("current", i === idx));
-    const real = ((idx - 1) % n + n) % n;
-    $$(".hero-dot", hero).forEach(d => d.classList.toggle("active", Number(d.dataset.i) === real));
+    $$(".hero-dot", hero).forEach(d => d.classList.toggle("active", Number(d.dataset.i) === realIndex()));
+    updateCard();
+    playCurrentVideo();
   };
-  const setX = (animate) => {
+  const setX = animate => {
     track.classList.toggle("no-anim", !animate);
     track.style.transform = `translate3d(${-idx * 100}%,0,0)`;
   };
 
-  if (n === 1) { slideEls[0].classList.add("current"); return; }
-
   setX(false);
   requestAnimationFrame(() => requestAnimationFrame(markCurrent));
 
-  const goTo = (target) => {
+  if (n === 1) { heroCleanup = () => {}; return; }
+
+  const goTo = target => {
     if (animating) return;
     animating = true;
     idx = target;
     setX(true);
     markCurrent();
   };
-  track.addEventListener("transitionend", e => {
+  const onTransEnd = e => {
     if (e.target !== track) return;
     animating = false;
     if (idx === 0) { idx = n; setX(false); markCurrent(); }
     else if (idx === n + 1) { idx = 1; setX(false); markCurrent(); }
-  });
+  };
+  track.addEventListener("transitionend", onTransEnd);
 
   const next = () => goTo(idx + 1);
   const prev = () => goTo(idx - 1);
   $("#heroNext", hero).addEventListener("click", () => { next(); restart(); });
   $("#heroPrev", hero).addEventListener("click", () => { prev(); restart(); });
-  $$(".hero-dot", hero).forEach(d => d.addEventListener("click", () => {
-    goTo(Number(d.dataset.i) + 1); restart();
-  }));
+  $$(".hero-dot", hero).forEach(d => d.addEventListener("click", () => { goTo(Number(d.dataset.i) + 1); restart(); }));
 
-  // autoplay
   const start = () => {
     if (!autoplay || timer) return;
     hero.classList.add("autoplaying");
@@ -532,15 +663,15 @@ function initHero(root, slides) {
   const restart = () => { stop(); start(); };
   hero.addEventListener("mouseenter", stop);
   hero.addEventListener("mouseleave", start);
-  document.addEventListener("visibilitychange", () => document.hidden ? stop() : start());
+  const onVis = () => document.hidden ? stop() : start();
+  document.addEventListener("visibilitychange", onVis);
   start();
 
-  // pointer drag / touch swipe
+  /* drag / swipe */
   let dragStart = null, dragDX = 0;
   const width = () => hero.clientWidth || 1;
   track.addEventListener("pointerdown", e => {
-    if (animating) return;
-    if (e.target.closest("a, button")) return;
+    if (animating || e.target.closest("a, button")) return;
     dragStart = e.clientX; dragDX = 0;
     hero.classList.add("dragging");
     track.setPointerCapture(e.pointerId);
@@ -564,21 +695,26 @@ function initHero(root, slides) {
   track.addEventListener("pointerup", endDrag);
   track.addEventListener("pointercancel", endDrag);
   track.addEventListener("click", e => {
-    // suppress accidental navigation after a drag
     if (Math.abs(dragDX) > 6) { e.preventDefault(); e.stopPropagation(); }
   }, true);
 
-  // trackpad horizontal swipe
+  /* trackpad horizontal swipe */
   let wheelAcc = 0, wheelLock = false;
-  hero.addEventListener("wheel", e => {
+  const lockWheel = () => { wheelAcc = 0; wheelLock = true; setTimeout(() => { wheelLock = false; }, 750); };
+  const onWheel = e => {
     if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
     e.preventDefault();
     if (wheelLock) return;
     wheelAcc += e.deltaX;
     if (wheelAcc > 70) { next(); restart(); lockWheel(); }
     else if (wheelAcc < -70) { prev(); restart(); lockWheel(); }
-  }, { passive: false });
-  const lockWheel = () => { wheelAcc = 0; wheelLock = true; setTimeout(() => { wheelLock = false; }, 750); };
+  };
+  hero.addEventListener("wheel", onWheel, { passive: false });
+
+  heroCleanup = () => {
+    stop();
+    document.removeEventListener("visibilitychange", onVis);
+  };
 }
 
 /* ---------------- PHOTOGRAPHY ---------------- */
@@ -589,7 +725,6 @@ function renderPhotography(app, params) {
   if (params.get("tag")) galleryState.tags = [params.get("tag")];
   const s = D.site;
   const seriesNames = D.series.map(x => x.title);
-  // include any series referenced by photos but missing a series file
   D.photos.forEach(p => p.series.forEach(x => { if (x && !seriesNames.includes(x)) seriesNames.push(x); }));
   const allTags = [...new Set(D.photos.flatMap(p => p.tags))].sort((a, b) => a.localeCompare(b));
   const allCameras = [...new Set(D.photos.map(p => p.camera).filter(Boolean))].sort();
@@ -603,8 +738,7 @@ function renderPhotography(app, params) {
     <div class="filter-bar">
       <div class="chip-row" id="seriesRow">
         <span class="row-label">Series</span>
-        ${["All", ...seriesNames].map(x =>
-          `<button class="chip" data-series="${attr(x)}">${esc(x)}</button>`).join("")}
+        ${["All", ...seriesNames].map(x => `<button class="chip" data-series="${attr(x)}">${esc(x)}</button>`).join("")}
       </div>
       ${allTags.length ? `<div class="chip-row" id="tagRow">
         <span class="row-label">Tags</span>
@@ -620,6 +754,7 @@ function renderPhotography(app, params) {
           <option value="All">All cameras</option>
           ${allCameras.map(c => `<option value="${attr(c)}">${esc(c)}</option>`).join("")}
         </select>` : ""}
+        <button class="btn-link" id="clearFilters" style="margin-left:6px">Clear</button>
       </div>
     </div>
     <section class="section" style="padding-top:0">
@@ -659,6 +794,10 @@ function renderPhotography(app, params) {
   }));
   const ss = $("#sortSel", app); if (ss) ss.addEventListener("change", () => { galleryState.sort = ss.value; applyFilters(); });
   const cs = $("#cameraSel", app); if (cs) cs.addEventListener("change", () => { galleryState.camera = cs.value; applyFilters(); });
+  $("#clearFilters", app).addEventListener("click", () => {
+    galleryState.series = "All"; galleryState.tags = []; galleryState.camera = "All"; galleryState.sort = "new";
+    syncChips(); applyFilters();
+  });
 
   syncChips();
   applyFilters();
@@ -712,7 +851,7 @@ function renderPhotoPage(app, slug) {
           ${specs.map(([k, v]) => `<div class="spec-cell"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div></div>`).join("")}
         </div>` : ""}
         <div id="paletteWrap" hidden style="margin-top:22px">
-          <span class="row-label" style="font-family:var(--font-head);font-size:11px;letter-spacing:.26em;text-transform:uppercase;color:var(--text-faint)">Dominant colours</span>
+          <span style="font-family:var(--font-head);font-size:11px;letter-spacing:.26em;text-transform:uppercase;color:var(--text-faint)">Dominant colours</span>
           <div class="palette-row" id="paletteRow"></div>
         </div>
       </div>
@@ -735,11 +874,10 @@ function renderPhotoPage(app, slug) {
     $("#paletteWrap", app).hidden = false;
     $("#paletteRow", app).innerHTML = colors.map((c, ci) =>
       `<span class="palette-dot" title="${attr(c)}" style="background:${attr(c)};animation-delay:${ci * 90}ms"></span>`).join("");
-  }).catch(() => { /* palette is a nice-to-have */ });
+  }).catch(() => {});
   img.complete ? runPalette() : img.addEventListener("load", runPalette);
 }
 
-/* dominant colour extraction via canvas sampling */
 async function extractPalette(img, count = 5) {
   const c = document.createElement("canvas");
   const w = 72, h = Math.max(1, Math.round(72 * img.naturalHeight / (img.naturalWidth || 1)));
@@ -778,7 +916,7 @@ function renderDownloads(app) {
     </div>
     <section class="section" style="padding-top:16px">
       ${list.length ? `<div class="grid-photos grid-anim">
-        ${list.map(p => `<div style="display:flex;flex-direction:column;gap:10px">
+        ${list.map(p => `<div class="dl-item">
           ${photoCard(p)}
           <a class="btn btn-ghost" style="width:100%" href="${attr(p.image)}" download>${iconDownload(15)} Download</a>
         </div>`).join("")}
@@ -833,9 +971,9 @@ function openFilmModal(f) {
   if (f.yt) media = `<iframe src="https://www.youtube-nocookie.com/embed/${attr(f.yt)}?autoplay=1&rel=0" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>`;
   else if (f.vimeo) media = `<iframe src="https://player.vimeo.com/video/${attr(f.vimeo)}?autoplay=1" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>`;
   else if (f.file) media = `<video src="${attr(f.file)}" controls autoplay playsinline></video>`;
-  else media = `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--text-faint)">No video source set</div>`;
+  else media = `<div class="modal-empty">No video source set</div>`;
 
-  const meta = [f.type, f.date ? f.date.getFullYear() : "", f.length].filter(Boolean).join(" · ");
+  const meta = [f.type, f.year, f.length].filter(Boolean).join(" · ");
   filmModalEl = document.createElement("div");
   filmModalEl.className = "modal-backdrop";
   filmModalEl.innerHTML = `
@@ -891,6 +1029,7 @@ function renderArticle(app, slug) {
 /* ---------------- ABOUT ---------------- */
 function renderAbout(app) {
   const a = D.about;
+  const links = (Array.isArray(a.links) ? a.links : []).filter(x => x && x.url);
   app.innerHTML = `<div class="page">
     <div class="page-head">
       <span class="kicker">${esc(a.kicker || "About")}</span>
@@ -904,7 +1043,10 @@ function renderAbout(app) {
         ${listify(a.capabilities).length ? `<div class="chip-row" style="margin-top:30px">
           ${listify(a.capabilities).map(c => `<span class="chip-static">${esc(c)}</span>`).join("")}
         </div>` : ""}
-        <div style="margin-top:34px"><a class="btn btn-primary" href="#/contact">Get in touch</a></div>
+        <div style="margin-top:34px;display:flex;gap:12px;flex-wrap:wrap">
+          <a class="btn btn-primary" href="${attr(a.button_url || "#/contact")}">${esc(a.button_label || "Get in touch")}</a>
+          ${links.map(l => `<a class="btn btn-ghost" href="${attr(l.url)}" target="_blank" rel="noopener">${esc(l.label)}</a>`).join("")}
+        </div>
       </div>
     </div>
   </div>`;
@@ -921,6 +1063,10 @@ function renderContact(app) {
       <p class="dim" style="max-width:52ch;font-size:16.5px;margin-bottom:44px">${esc(c.intro || "")}</p>
       ${c.email ? `<a class="contact-email" href="mailto:${attr(c.email)}">${esc(c.email)}</a>` : ""}
       ${c.email_note ? `<p class="dim" style="margin-top:18px;font-size:13.5px">${esc(c.email_note)}</p>` : ""}
+      ${c.location || c.availability ? `<div class="contact-extra">
+        ${c.location ? `<div><span class="k">Based in</span><span class="v">${esc(c.location)}</span></div>` : ""}
+        ${c.availability ? `<div><span class="k">Availability</span><span class="v">${esc(c.availability)}</span></div>` : ""}
+      </div>` : ""}
       ${socials.length ? `<div class="social-row">
         ${socials.map(sx => `<a class="chip" href="${attr(sx.url)}" target="_blank" rel="noopener">${esc(sx.label)}</a>`).join("")}
       </div>` : ""}
@@ -953,21 +1099,24 @@ function bindReveal(root) {
   $$("[data-reveal]", root).forEach(el => revealObserver.observe(el));
 }
 
-/* ---------------- shell (nav + footer) ---------------- */
+/* ---------------- shell ---------------- */
 function buildShell() {
-  const navLinks = mode => NAV.map(n =>
-    `<a href="#/${n.id}" data-page="${n.id}">${n.label}</a>`).join("");
+  const s = D.site;
+  const navLinks = NAV.map(n =>
+    `<a href="#/${n.id}" data-page="${n.id}">${esc(s[n.key] || n.label)}</a>`).join("");
+  $("#navLinks").innerHTML = navLinks;
+  $("#footerLinks").innerHTML = navLinks;
+  $("#mobileLinks").innerHTML = navLinks;
+  $("#footerNote").textContent = s.footer_text || "© Astris";
+  $$(".brand span").forEach(el => { el.textContent = s.brand || "ASTRIS"; });
+  setNavActive(parseHash().page);
+}
 
-  $("#navLinks").innerHTML = navLinks();
-  $("#footerLinks").innerHTML = navLinks();
-  $("#mobileLinks").innerHTML = navLinks();
-  $("#footerNote").textContent = D.site.footer_text || "© Astris";
-
+function bindShellOnce() {
   const menu = $("#mobileMenu");
   $("#navToggle").addEventListener("click", () => menu.classList.add("open"));
   $("#navClose").addEventListener("click", () => menu.classList.remove("open"));
   menu.addEventListener("click", e => { if (e.target.tagName === "A") menu.classList.remove("open"); });
-
   document.addEventListener("keydown", e => {
     if (e.key === "Escape") { closeFilmModal(); menu.classList.remove("open"); }
   });
@@ -976,11 +1125,10 @@ function buildShell() {
 /* ---------------- boot ---------------- */
 window.addEventListener("hashchange", render);
 document.addEventListener("DOMContentLoaded", () => {
+  bindShellOnce();
   buildShell();
   render();
-  loadContent().then(() => {
-    $("#footerNote").textContent = D.site.footer_text || "© Astris";
-  });
+  loadContent();
 });
 
 })();
