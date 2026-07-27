@@ -1,14 +1,11 @@
 kicker: About
-heading: A one-person studio, built for the long shot.
-intro: Photographer and filmmaker based in Canberra. Astris is where the work lives — stills, shorts and everything in between.
-image: /images/uploads/test.jpg
-body: >-
-  This is where my about story will go — directing, shooting and editing,
-  all me. Edit this text from Astris Studio.
+heading: HI
+intro: Photographer and filmmaker based in Canberra.
+image: ""
 button_label: Get in touch
 button_url: "#/contact"
-home_heading: Hi — I'm the one behind Astris.
-home_text: A short intro will go here — editable from Astris Studio.
+home_heading: Hi I'm Josh
+home_text: hi
 capabilities:
   - Photography
   - Filmmaking
