@@ -59,25 +59,60 @@ function localDT(iso) {
 }
 
 /* ---------------- GitHub ---------------- */
-async function gh(path, opts = {}) {
-  const res = await fetch(API + path, {
-    ...opts,
-    headers: {
-      "Authorization": "Bearer " + S.token,
-      "Accept": opts.raw ? "application/vnd.github.raw+json" : "application/vnd.github+json",
-      "X-GitHub-Api-Version": "2022-11-28",
-      ...(opts.body ? { "Content-Type": "application/json" } : {}),
-      ...(opts.headers || {})
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+/* mapLimit: run fn over items with at most `limit` in flight at once.
+   Safe for independent work (e.g. blob uploads); never use it to run
+   whole commits concurrently — git ref updates must stay serialized. */
+async function mapLimit(items, limit, fn) {
+  const ret = new Array(items.length);
+  let i = 0;
+  async function worker() {
+    while (i < items.length) {
+      const idx = i++;
+      ret[idx] = await fn(items[idx], idx);
     }
-  });
+  }
+  await Promise.all(new Array(Math.min(limit, items.length)).fill(0).map(worker));
+  return ret;
+}
+
+/* Retries transient failures (network blips, 5xx, secondary rate limits)
+   so a single flaky request doesn't fail an entire save. Auth/permission
+   errors (401/404, or a 403 that isn't a rate limit) fail immediately. */
+async function gh(path, opts = {}, attempt = 0) {
+  let res;
+  try {
+    res = await fetch(API + path, {
+      ...opts,
+      headers: {
+        "Authorization": "Bearer " + S.token,
+        "Accept": opts.raw ? "application/vnd.github.raw+json" : "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        ...(opts.body ? { "Content-Type": "application/json" } : {}),
+        ...(opts.headers || {})
+      }
+    });
+  } catch (networkErr) {
+    if (attempt < 3) { await sleep(500 * (attempt + 1)); return gh(path, opts, attempt + 1); }
+    throw new Error("Network error contacting GitHub — check your connection and try again.");
+  }
   if (!res.ok) {
+    const retryable = res.status >= 500 ||
+      (res.status === 403 && res.headers.get("x-ratelimit-remaining") === "0") ||
+      res.status === 429;
+    if (retryable && attempt < 3) { await sleep(700 * (attempt + 1)); return gh(path, opts, attempt + 1); }
     const t = await res.text().catch(() => "");
     throw new Error(`GitHub ${res.status}: ${t.slice(0, 180)}`);
   }
   return opts.raw ? res.text() : res.json();
 }
 
-/* Commit a set of file changes as one commit (chunked for very large batches). */
+/* Commit a set of file changes as one commit (chunked only for very large
+   batches — most calls are a single chunk, i.e. a single commit). Blob
+   uploads within a chunk run in parallel since they're independent; the
+   tree/commit/ref-update sequence stays strictly one-at-a-time per chunk
+   so concurrent commits can never race each other off the branch tip. */
 async function commitFiles(message, changes, onProgress) {
   if (!changes.length) return;
   const chunks = [];
@@ -95,11 +130,11 @@ async function commitFiles(message, changes, onProgress) {
     const ref = await gh(`/repos/${REPO}/git/ref/heads/${BRANCH}`);
     const headSha = ref.object.sha;
     const headCommit = await gh(`/repos/${REPO}/git/commits/${headSha}`);
-    const treeEntries = [];
     let done = 0;
-    for (const ch of chunk) {
+    const treeEntries = await mapLimit(chunk, 4, async ch => {
+      let entry;
       if (ch.del) {
-        treeEntries.push({ path: ch.path, mode: "100644", type: "blob", sha: null });
+        entry = { path: ch.path, mode: "100644", type: "blob", sha: null };
       } else {
         const blob = await gh(`/repos/${REPO}/git/blobs`, {
           method: "POST",
@@ -107,11 +142,12 @@ async function commitFiles(message, changes, onProgress) {
             ? { content: ch.base64, encoding: "base64" }
             : { content: ch.content, encoding: "utf-8" })
         });
-        treeEntries.push({ path: ch.path, mode: "100644", type: "blob", sha: blob.sha });
+        entry = { path: ch.path, mode: "100644", type: "blob", sha: blob.sha };
       }
       done++;
       if (onProgress) onProgress(ci, chunks.length, done, chunk.length);
-    }
+      return entry;
+    });
     const tree = await gh(`/repos/${REPO}/git/trees`, {
       method: "POST", body: JSON.stringify({ base_tree: headCommit.tree.sha, tree: treeEntries })
     });
@@ -344,10 +380,20 @@ async function stageMedia(file, changes) {
   return "/" + path;
 }
 
-async function reload() {
-  S.loaded = false; render();
-  await loadAll();
-  render();
+/* Manual "Refresh" only — pulls fresh data from GitHub. Every save/delete/
+   create in Studio updates the in-memory library directly instead of
+   reloading, so this is never required after a normal edit, and a failure
+   here can never leave the UI stuck (unlike a reload after every save,
+   which is what used to happen). */
+async function safeReload() {
+  toast("Refreshing from GitHub…");
+  try {
+    await loadAll();
+    render();
+    toast("Refreshed ✓", "ok");
+  } catch (e) {
+    toast("Refresh failed: " + e.message, "err");
+  }
 }
 
 /* ---------------- field rendering ---------------- */
@@ -502,6 +548,15 @@ async function stagePickers(root, values, changes) {
 function render() {
   const root = $("#root");
   if (!S.token) return renderSetup(root);
+  if (S.loadError) {
+    root.innerHTML = `<div class="setup splash">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="12" cy="12" r="9"></circle><path d="M12 3v4M12 17v4M3 12h4M17 12h4"></path></svg>
+      <h1 style="font-size:24px;margin-top:18px">Couldn't load your library</h1>
+      <p class="muted" style="margin-top:10px;max-width:44ch;margin-left:auto;margin-right:auto">${esc(S.loadError)}</p>
+      <button class="btn btn-primary" id="retryBoot" style="margin-top:20px">Try again</button></div>`;
+    $("#retryBoot").addEventListener("click", () => { S.loadError = null; boot(); });
+    return;
+  }
   if (!S.loaded) {
     root.innerHTML = `<div class="setup splash">
       <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="12" cy="12" r="9"></circle><path d="M12 3v4M12 17v4M3 12h4M17 12h4"></path></svg>
@@ -528,6 +583,7 @@ function render() {
       <div class="foot">
         <a href="${SITE_URL}/" target="_blank">View website ↗</a>
         <a href="${SITE_URL}/admin/cms.html" target="_blank">Classic editor ↗</a>
+        <a href="#" id="refreshLib">Refresh library</a>
         <span>${esc(S.user ? S.user.login : "")}</span>
         <a href="#" id="logout">Sign out</a>
       </div>
@@ -535,6 +591,7 @@ function render() {
     <main class="main" id="view"></main>
   </div>`;
   $$(".tab", root).forEach(b => b.addEventListener("click", () => { S.view = b.dataset.view; render(); }));
+  $("#refreshLib").addEventListener("click", e => { e.preventDefault(); safeReload(); });
   $("#logout").addEventListener("click", e => {
     e.preventDefault(); localStorage.removeItem(TOKEN_KEY); location.reload();
   });
@@ -711,12 +768,15 @@ function batchRowHTML(r, i) {
         <div class="ttl">${esc(r.title || "Untitled")}</div>
         <div class="fn">${esc(r.file.name)} · ${(r.file.size / 1048576).toFixed(1)} MB${r.camera ? " · " + esc(r.camera) : ""}${r.aperture ? " · " + esc(r.aperture) : ""}${r.shutter ? " · " + esc(r.shutter) : ""}</div>
       </div>
+      ${r.status === "uploading" ? '<span class="pill pill-accent">uploading…</span>' : ""}
+      ${r.status === "failed" ? '<span class="pill" style="color:var(--err);border-color:var(--err)">failed — will retry</span>' : ""}
       ${r.featured ? '<span class="pill pill-accent">featured</span>' : ""}
       ${r.download ? '<span class="pill pill-ok">download</span>' : ""}
       <button class="iconbtn" data-act="dup" title="Duplicate">⧉</button>
       <button class="iconbtn" data-act="del" title="Remove">✕</button>
       <button class="iconbtn" data-act="fold">${r.collapsed ? "▸" : "▾"}</button>
     </div>
+    ${r.error ? `<div style="padding:0 16px 14px;color:var(--err);font-size:12.5px">${esc(r.error)}</div>` : ""}
     <div class="batch-body ${r.collapsed ? "hidden" : ""}">
       <div class="field span2"><label>Title</label><input data-f="title" value="${esc(r.title)}"></div>
       <div class="field span2"><label>Caption</label><input data-f="caption" value="${esc(r.caption)}"></div>
@@ -758,35 +818,59 @@ function bindBatchRow(rows, r, i) {
   });
 }
 
+/* Each photo is committed on its own — one small commit per photo, run
+   strictly one at a time (never concurrently: two commits racing the same
+   branch tip would silently drop one of them). If photo #7 of 10 fails,
+   photos #1-6 are already safely published and stay published; #7 stays
+   in the queue with its edits intact so Publish can simply be clicked
+   again, and #8-10 are attempted too rather than being blocked by #7. */
 async function publishBatch() {
-  if (!S.batch.length) return;
+  if (!S.batch.length || S._publishing) return;
   const mb = S.batch.reduce((a, r) => a + r.file.size, 0) / 1048576;
   if (mb > 300 && !confirm(`This batch is ${Math.round(mb)} MB — large batches take a while. Continue?`)) return;
-  showProgress(`Publishing ${S.batch.length} photos`);
-  try {
-    const taken = new Set(S.slugs.photos);
-    const changes = [];
-    let maxOrder = Math.max(0, ...S.photos.filter(p => p.featured).map(p => p.featuredOrder).filter(o => o < 999));
-    for (let i = 0; i < S.batch.length; i++) {
-      const r = S.batch[i];
-      setProgress(0.35 * (i / S.batch.length), `Preparing ${r.file.name}…`);
+
+  S._publishing = true;
+  const total = S.batch.length;
+  let done = 0, failed = 0;
+  let maxOrder = Math.max(0, ...S.photos.filter(p => p.featured).map(p => p.featuredOrder).filter(o => o < 999));
+  showProgress(`Publishing ${total} photo${total > 1 ? "s" : ""}`);
+
+  for (const r of S.batch.slice()) {
+    r.status = "uploading"; r.error = "";
+    setProgress((done + failed) / total, `Publishing ${r.file.name}… (${done + failed}/${total})`);
+    render();
+    try {
+      const changes = [];
       const image = await stageMedia(r.file, changes);
-      const slug = uniqueSlug(slugify(r.title || r.file.name), taken);
-      taken.add(slug);
-      changes.push({ path: "content/photos/" + slug + ".md", content: photoToMD({
+      const slug = uniqueSlug(slugify(r.title || r.file.name), new Set(S.slugs.photos));
+      const featuredOrder = r.featured ? maxOrder + 1 : 999;
+      const photo = {
         title: r.title || slug, image, caption: r.caption, description: r.description, story: r.story,
         series: r.series, tags: r.tags, date: r.date || new Date().toISOString(),
         camera: r.camera, lens: r.lens, iso: r.iso, aperture: r.aperture, shutter: r.shutter, focal: r.focal,
-        featured: r.featured, featuredOrder: r.featured ? ++maxOrder : 999, download: r.download
-      }) });
+        featured: r.featured, featuredOrder, download: r.download
+      };
+      const path = "content/photos/" + slug + ".md";
+      changes.push({ path, content: photoToMD(photo) });
+      await commitFiles(`Add photo: ${photo.title} via Astris Studio`, changes);
+
+      if (r.featured) maxOrder = featuredOrder;
+      S.slugs.photos.add(slug);
+      S.photos.unshift({ ...photo, path, slug });
+      S.batch = S.batch.filter(x => x !== r);
+      done++;
+    } catch (e) {
+      r.status = "failed"; r.error = "Didn't publish: " + e.message;
+      failed++;
     }
-    await commitFiles(`Batch upload: ${S.batch.length} photos via Astris Studio`, changes,
-      (ci, cn, d, t) => setProgress(0.35 + 0.65 * ((ci + d / t) / cn), `Uploading… (${d}/${t})`));
-    hideProgress();
-    toast(`Published ${S.batch.length} photos ✓ — live in about a minute.`, "ok");
-    S.batch = [];
-    await reload();
-  } catch (e) { hideProgress(); toast("Publish failed: " + e.message, "err"); }
+    render();
+  }
+
+  S._publishing = false;
+  hideProgress();
+  if (failed) toast(`Published ${done} of ${total} — ${failed} failed and stayed in the queue below. Click Publish to retry.`, done ? "ok" : "err");
+  else toast(`Published ${done} photo${done === 1 ? "" : "s"} ✓ — live in about a minute.`, "ok");
+  render();
 }
 
 /* ---------------- photo library ---------------- */
@@ -907,9 +991,14 @@ async function deletePhotos(list) {
         changes.push({ path: img, del: true });
     }
     await commitFiles(`Delete ${list.length} photos via Astris Studio`, changes);
-    hideProgress(); toast("Deleted ✓", "ok");
+    S.photos = S.photos.filter(p => !list.includes(p));
+    list.forEach(p => {
+      S.slugs.photos.delete(p.slug);
+      const img = (p.image || "").replace(/^\//, "");
+      if (img && !S.photos.some(x => x.image.replace(/^\//, "") === img)) S.imagePaths.delete(img);
+    });
     S.sel = new Set(); S.dirty = new Set();
-    await reload();
+    hideProgress(); toast("Deleted ✓", "ok"); render();
   } catch (e) { hideProgress(); toast("Delete failed: " + e.message, "err"); }
 }
 
@@ -980,7 +1069,8 @@ function vFilms(v) {
     $("[data-act=edit]", tr).addEventListener("click", () => openFilmDrawer(f));
     $("[data-act=del]", tr).addEventListener("click", async () => {
       if (!confirm(`Delete film "${f.title}"?`)) return;
-      await commitOp(`Delete film: ${f.title}`, [{ path: f.path, del: true }]);
+      await commitOp(`Delete film: ${f.title}`, [{ path: f.path, del: true }],
+        () => { S.films = S.films.filter(x => x !== f); S.slugs.films.delete(f.slug); });
     });
     $("[data-t]", tr).addEventListener("click", async () => {
       f.featured = !f.featured;
@@ -997,17 +1087,22 @@ function openFilmDrawer(f) {
     title: isNew ? "New film" : val.title,
     fields: FILM_FIELDS, values: val,
     onSave: async (vals, changes) => {
-      const film = { ...val, ...vals, featuredOrder: Number(vals.featuredOrder) || 999 };
-      if (!film.title.trim()) throw new Error("A film needs a title.");
-      if (!film.year && film.date) film.year = String(new Date(film.date).getFullYear());
-      const path = isNew
-        ? "content/videos/" + uniqueSlug(slugify(film.title), S.slugs.films) + ".md"
-        : val.path;
-      changes.push({ path, content: filmToMD(film) });
-      return `${isNew ? "Add" : "Update"} film: ${film.title}`;
+      Object.assign(val, vals, { featuredOrder: Number(vals.featuredOrder) || 999 });
+      if (!val.title.trim()) throw new Error("A film needs a title.");
+      if (!val.year && val.date) val.year = String(new Date(val.date).getFullYear());
+      if (isNew) {
+        val.slug = uniqueSlug(slugify(val.title), S.slugs.films);
+        val.path = "content/videos/" + val.slug + ".md";
+        S.slugs.films.add(val.slug);
+        S.films.unshift(val);
+        S.films.sort((a, b) => String(b.date).localeCompare(String(a.date)));
+      }
+      changes.push({ path: val.path, content: filmToMD(val) });
+      return `${isNew ? "Add" : "Update"} film: ${val.title}`;
     },
     onDelete: isNew ? null : async () => {
-      await commitOp(`Delete film: ${val.title}`, [{ path: val.path, del: true }]);
+      await commitOp(`Delete film: ${val.title}`, [{ path: val.path, del: true }],
+        () => { S.films = S.films.filter(x => x !== val); S.slugs.films.delete(val.slug); });
     }
   });
 }
@@ -1043,7 +1138,9 @@ function vNews(v) {
     const n = S.news[Number(tr.dataset.i)];
     $("[data-act=edit]", tr).addEventListener("click", () => openNewsDrawer(n));
     $("[data-act=del]", tr).addEventListener("click", async () => {
-      if (confirm(`Delete post "${n.title}"?`)) await commitOp(`Delete news: ${n.title}`, [{ path: n.path, del: true }]);
+      if (!confirm(`Delete post "${n.title}"?`)) return;
+      await commitOp(`Delete news: ${n.title}`, [{ path: n.path, del: true }],
+        () => { S.news = S.news.filter(x => x !== n); S.slugs.news.delete(n.slug); });
     });
   });
 }
@@ -1054,14 +1151,21 @@ function openNewsDrawer(n) {
     title: isNew ? "New post" : val.title,
     fields: NEWS_FIELDS, values: val,
     onSave: async (vals, changes) => {
-      const post = { ...val, ...vals };
-      if (!post.title.trim()) throw new Error("A post needs a title.");
-      const path = isNew ? "content/news/" + uniqueSlug(slugify(post.title), S.slugs.news) + ".md" : val.path;
-      changes.push({ path, content: newsToMD(post) });
-      return `${isNew ? "Add" : "Update"} news: ${post.title}`;
+      Object.assign(val, vals);
+      if (!val.title.trim()) throw new Error("A post needs a title.");
+      if (isNew) {
+        val.slug = uniqueSlug(slugify(val.title), S.slugs.news);
+        val.path = "content/news/" + val.slug + ".md";
+        S.slugs.news.add(val.slug);
+        S.news.unshift(val);
+        S.news.sort((a, b) => String(b.date).localeCompare(String(a.date)));
+      }
+      changes.push({ path: val.path, content: newsToMD(val) });
+      return `${isNew ? "Add" : "Update"} news: ${val.title}`;
     },
     onDelete: isNew ? null : async () => {
-      await commitOp(`Delete news: ${val.title}`, [{ path: val.path, del: true }]);
+      await commitOp(`Delete news: ${val.title}`, [{ path: val.path, del: true }],
+        () => { S.news = S.news.filter(x => x !== val); S.slugs.news.delete(val.slug); });
     }
   });
 }
@@ -1116,10 +1220,10 @@ function vSeries(v) {
     const t = $("#newSeries", v).value.trim();
     if (!t) return;
     if (S.series.some(s => s.title.toLowerCase() === t.toLowerCase())) return toast("That series already exists", "err");
-    await commitOp("Create series: " + t, [{
-      path: "content/series/" + slugify(t) + ".md",
-      content: seriesToMD({ title: t, order: S.series.length + 1 })
-    }]);
+    const path = "content/series/" + slugify(t) + ".md";
+    const order = S.series.length + 1;
+    await commitOp("Create series: " + t, [{ path, content: seriesToMD({ title: t, order }) }],
+      () => { S.series.push({ path, title: t, order, description: "" }); });
   });
   $$("tbody tr", v).forEach(tr => {
     const s = S.series[Number(tr.dataset.i)];
@@ -1135,13 +1239,15 @@ function vSeries(v) {
       if (m === "rename") {
         const nt = prompt(`Rename "${s.title}" to:`, s.title);
         if (!nt || nt === s.title) return;
+        const newPath = "content/series/" + slugify(nt) + ".md";
         const changes = [{ path: s.path, del: true },
-          { path: "content/series/" + slugify(nt) + ".md", content: seriesToMD({ ...s, title: nt }) }];
+          { path: newPath, content: seriesToMD({ ...s, title: nt }) }];
         S.photos.filter(p => p.series.includes(s.title)).forEach(p => {
           p.series = p.series.map(x => x === s.title ? nt : x);
           changes.push({ path: p.path, content: photoToMD(p) });
         });
-        await commitOp(`Rename series ${s.title} → ${nt}`, changes);
+        await commitOp(`Rename series ${s.title} → ${nt}`, changes,
+          () => { s.title = nt; s.path = newPath; });
       }
       if (m === "merge") {
         const others = S.series.filter(x => x !== s).map(x => x.title);
@@ -1154,7 +1260,8 @@ function vSeries(v) {
           p.series = [...new Set(p.series.map(x => x === s.title ? target : x))];
           changes.push({ path: p.path, content: photoToMD(p) });
         });
-        await commitOp(`Merge series ${s.title} → ${target}`, changes);
+        await commitOp(`Merge series ${s.title} → ${target}`, changes,
+          () => { S.series = S.series.filter(x => x !== s); });
       }
       if (m === "del") {
         const n = count(s.title);
@@ -1164,7 +1271,8 @@ function vSeries(v) {
           p.series = p.series.filter(x => x !== s.title);
           changes.push({ path: p.path, content: photoToMD(p) });
         });
-        await commitOp("Delete series: " + s.title, changes);
+        await commitOp("Delete series: " + s.title, changes,
+          () => { S.series = S.series.filter(x => x !== s); });
       }
     }));
   });
@@ -1300,8 +1408,7 @@ function vBanner(v) {
       });
       await commitFiles("Update hero banner via Astris Studio", changes);
       S._heroPending = null;
-      hideProgress(); toast("Banner saved ✓", "ok");
-      await reload();
+      hideProgress(); toast("Banner saved ✓", "ok"); render();
     } catch (e) { hideProgress(); toast("Save failed: " + e.message, "err"); }
   });
 }
@@ -1412,8 +1519,7 @@ function vPages(v) {
       changes.push({ path: PATHS.about, content: objToYAML(S.about) });
       changes.push({ path: PATHS.contact, content: objToYAML(S.contact) });
       await commitFiles("Update About & Contact via Astris Studio", changes);
-      hideProgress(); toast("Pages saved ✓", "ok");
-      await reload();
+      hideProgress(); toast("Pages saved ✓", "ok"); render();
     } catch (e) { hideProgress(); toast("Save failed: " + e.message, "err"); }
   });
 }
@@ -1491,10 +1597,13 @@ function openDrawer({ title, fields, values, extra, onSave, onDelete }) {
     try {
       const changes = [];
       const vals = await stagePickers(form, readFields(form, fields, {}), changes);
+      // onSave applies vals to the live in-memory object (or pushes a new
+      // one) before we commit, so once the commit succeeds the library is
+      // already up to date locally — no reload, no waiting, no risk of a
+      // failed background refetch leaving the UI stuck.
       const msg = await onSave(vals, changes);
       await commitFiles(msg + " via Astris Studio", changes);
-      hideProgress(); closeDrawer(); toast("Saved ✓", "ok");
-      await reload();
+      hideProgress(); closeDrawer(); toast("Saved ✓", "ok"); render();
     } catch (e) { hideProgress(); toast("Save failed: " + e.message, "err"); }
   });
 }
@@ -1503,13 +1612,17 @@ function closeDrawer() {
   S.drawer.back.remove(); S.drawer.el.remove(); S.drawer = null;
 }
 
-/* Run a small write operation with progress + reload. */
-async function commitOp(msg, changes) {
+/* Run a small write operation with progress, then update local state and
+   re-render — never a network reload, so a slow or flaky connection can't
+   leave Studio stuck. Pass onSuccess to patch S.* after a successful
+   commit (used for deletes/creates, where the local change should only
+   happen once the commit is actually confirmed). */
+async function commitOp(msg, changes, onSuccess) {
   showProgress(msg);
   try {
     await commitFiles(msg + " via Astris Studio", changes);
-    hideProgress(); toast("Done ✓", "ok");
-    await reload();
+    if (onSuccess) onSuccess();
+    hideProgress(); toast("Done ✓", "ok"); render();
   } catch (e) { hideProgress(); toast("Failed: " + e.message, "err"); }
 }
 
@@ -1519,8 +1632,15 @@ async function boot() {
   if (!S.token) return;
   try { await loadAll(); render(); }
   catch (e) {
-    toast("Couldn't load the library: " + e.message, "err");
-    if (/401|403/.test(e.message)) { localStorage.removeItem(TOKEN_KEY); S.token = ""; render(); }
+    if (/401|403/.test(e.message) && !/rate limit/i.test(e.message)) {
+      toast("That token no longer works — please reconnect.", "err");
+      localStorage.removeItem(TOKEN_KEY); S.token = "";
+    } else {
+      // Never leave the UI stuck on the loading spinner — show a retry
+      // screen instead, however the initial load failed.
+      S.loadError = e.message;
+    }
+    render();
   }
 }
 document.addEventListener("keydown", e => { if (e.key === "Escape") closeDrawer(); });
