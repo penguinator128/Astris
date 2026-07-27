@@ -13,7 +13,7 @@ iso: ""
 aperture: ""
 shutter_speed: ""
 focal_length: ""
-featured: false
-featured_order: 999
+featured: true
+featured_order: 3
 download: true
 ---
