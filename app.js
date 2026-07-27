@@ -159,8 +159,37 @@ function md(src) {
   }).join("\n");
 }
 
-/* ---------------- content loading ---------------- */
+/* ---------------- content loading ----------------
+   Primary source is content-index.json, built at deploy time and
+   served from this site's own domain. That keeps the public site
+   off the GitHub API entirely — it allows only 60 requests/hour
+   for unauthenticated callers, counted per IP, so relying on it
+   meant visitors could hit the cap and get a stale copy (or an
+   error) once traffic picked up. It's also one request instead of
+   one per content file.
+
+   The GitHub API path is kept purely as a fallback, for the case
+   where the index hasn't been generated (e.g. a deploy that
+   skipped the build step). */
 async function loadContent() {
+  try {
+    const res = await fetch("content-index.json", { cache: "no-cache" });
+    if (res.ok) {
+      const raw = await res.json();
+      if (raw && raw.photos) {
+        writeCache(raw);
+        applyContent(raw);
+        return;
+      }
+    }
+    console.warn("content-index.json unavailable — falling back to the GitHub API.");
+  } catch (e) {
+    console.warn("content-index.json fetch failed — falling back to the GitHub API.", e);
+  }
+  await loadContentFromGitHub();
+}
+
+async function loadContentFromGitHub() {
   const cached = readCache();
   if (cached) { applyContent(cached); return; }
   try {
