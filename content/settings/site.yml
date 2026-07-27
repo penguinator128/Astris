@@ -32,13 +32,13 @@ home_news_kicker: Journal
 home_news_link: All news
 photography_kicker: Photography
 photography_heading: The gallery
-photography_intro: "Stills from across the archive — filter by series, tag or camera."
+photography_intro: Stills from across the archive
 films_kicker: Filmography
 films_heading: Films
 films_intro: "Short films, documentary and commercial work."
 downloads_kicker: Free to use
 downloads_heading: Downloads
-downloads_intro: "Selected photos, free to save and use — no login, free forever."
+downloads_intro: "Selected photos, free to save and use, no login, free forever."
 news_kicker: Journal
 news_heading: News
 news_intro: "Announcements, projects and notes "
@@ -49,5 +49,5 @@ nav_downloads: Downloads
 nav_news: News
 nav_about: About
 nav_contact: Contact
-footer_text: "© 2026 Astris — Josh"
+footer_text: "© 2026 Astris — Josh Brogan"
 footer_note: ""
