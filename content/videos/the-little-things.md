@@ -1,7 +1,7 @@
 ---
 title: The Little Things
 video_url: ""
-video: ""
+video: "https://www.dropbox.com/scl/fi/yas7z4zip7siq3vhzjgn6/the-little-things.mp4?rlkey=i64cpq4iqed55niyhrkt88lag&st=9tpkrm94&e=1&raw=1"
 thumbnail: /images/uploads/the-little-things-thumb.png
 type: Short Film
 year: "2026"
