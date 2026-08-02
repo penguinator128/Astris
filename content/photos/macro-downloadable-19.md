@@ -1,5 +1,5 @@
 ---
-title: Macro Downloadable 19
+title: Macro 19
 image: "/images/uploads/macro-downloadable-19.jpg"
 caption: ""
 description: ""
@@ -14,6 +14,6 @@ aperture: ""
 shutter_speed: ""
 focal_length: ""
 featured: false
-featured_order: 999
+featured_order: 4
 download: true
 ---
