@@ -1,14 +1,14 @@
 ---
 title: Existence
 image: "/images/uploads/macro-downloadable-2.jpg"
-caption: ""
+caption: Sold - Nell B
 description: ""
 story: ""
 series:
   - Macro
 tags:
   - Colourful
-date: "2026-07-26T12:40:38.856Z"
+date: "2026-07-26T12:40:00.000Z"
 camera: ""
 lens: ""
 iso: ""
