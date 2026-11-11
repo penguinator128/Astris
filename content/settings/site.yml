@@ -63,7 +63,7 @@ intro_items: []
 reel_items: []
 reel_speed: normal
 transition_mode: random
-transition_single: dissolve
+transition_single: advance
 transitions_enabled:
   - dissolve
   - iris
@@ -72,9 +72,8 @@ transitions_enabled:
   - zoom
   - dive
   - rack
-  - burn
-  - gate
-transition_speed: normal
+  - cut
+transition_speed: relaxed
 grain: "off"
 image_optimize: true
 reel_bands: true
