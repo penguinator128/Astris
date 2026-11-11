@@ -58,7 +58,7 @@ home_cta_link: "#/films"
 showreel: ""
 showreel_poster: ""
 intro_enabled: true
-intro_speed: fast
+intro_speed: normal
 intro_items: []
 reel_items: []
 reel_speed: normal
