@@ -1,7 +1,8 @@
 /* ============================================================
-   ASTRIS STUDIO — the control centre for the whole website.
-   Reads and writes content directly in the GitHub repository;
-   Vercel redeploys the public site on every commit.
+   ASTRIS STUDIO: the control centre for the whole website.
+   A separate website from the public one. It reads and writes content
+   directly in the GitHub repository; Vercel redeploys the public site
+   on every commit.
    ============================================================ */
 (() => {
 "use strict";
@@ -10,10 +11,14 @@ const REPO = "penguinator128/Astris";
 const BRANCH = "main";
 const API = "https://api.github.com";
 const TOKEN_KEY = "astris_studio_token";
-const SITE_URL = location.origin;
+const SITE_KEY = "astris_studio_site_url";
+const DEFAULT_SITE = "https://astrisfinal.vercel.app";
+const siteUrl = () => String(localStorage.getItem(SITE_KEY) || DEFAULT_SITE).replace(/\/+$/, "");
+const SITE_URL = { toString: () => siteUrl() };   /* used inside template strings as ${SITE_URL} */
 
-const FILM_TYPES = ["Documentary", "Narrative", "Commercial", "Short Film", "Travel",
-                    "Experimental", "Behind the Scenes", "Music Video", "Other"];
+const FILM_TYPES = ["Short", "Documentary", "Experimental", "Narrative", "Commercial", "Music Video",
+                    "Behind the Scenes", "Travel", "Other"];
+const STAGES = ["Idea", "Writing", "Shooting", "Editing", "Finishing"];
 
 const S = {
   token: localStorage.getItem(TOKEN_KEY) || "",
@@ -57,6 +62,26 @@ function localDT(iso) {
   const pad = n => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
+
+/* ---------------- pictures: the Studio is its own website, so pictures are fetched from GitHub ---------------- */
+const RAW = `https://raw.githubusercontent.com/${REPO}/${BRANCH}/`;
+const ON_VERCEL = !/^(localhost|127\.|\[::1\])/.test(location.hostname) && location.protocol !== "file:";
+const isAbs = p => /^(https?:|data:|blob:)/i.test(p || "");
+const rawUrl = p => !p ? "" : isAbs(p) ? p : RAW + String(p).replace(/^\/+/, "");
+/* w must be one of 96, 160, 256, 640, 1024, 1600 (see vercel.json) */
+function imgSrc(p, w) {
+  const u = rawUrl(p);
+  if (!u || !w || !ON_VERCEL || /^(data:|blob:)/.test(u) || !/\.(jpe?g|png|webp)(\?|$)/i.test(u)) return u;
+  return "/_vercel/image?url=" + encodeURIComponent(u) + "&w=" + w + "&q=70";
+}
+document.addEventListener("error", e => {
+  const t = e.target;
+  if (t && t.tagName === "IMG" && /\/_vercel\/image/.test(t.src) && !t.dataset.fb) {
+    t.dataset.fb = "1";
+    try { t.src = new URL(t.src, location.href).searchParams.get("url"); } catch (x) { /* ignore */ }
+  }
+}, true);
+const logoSVG = (h) => `<svg viewBox="0 0 1900 1600" height="${h}" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="${(window.ASTRIS_BRAND || {}).logo || ""}"/></svg>`;
 
 /* ---------------- GitHub ---------------- */
 async function gh(path, opts = {}) {
@@ -129,8 +154,9 @@ function parseYAML(src) {
   const out = {}; const lines = String(src).replace(/\r/g, "").split("\n"); let i = 0;
   const unq = v => {
     v = v.trim();
-    if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'")))
-      return v.slice(1, -1).replace(/\\"/g, '"');
+    if (v.startsWith('"') && v.endsWith('"') && v.length > 1)
+      return v.slice(1, -1).replace(/\\(["\\nrt])/g, (m, c) => ({ '"': '"', "\\": "\\", n: "\n", r: "\r", t: "\t" }[c]));
+    if (v.startsWith("'") && v.endsWith("'") && v.length > 1) return v.slice(1, -1).replace(/''/g, "'");
     if (v === "true") return true;
     if (v === "false") return false;
     if (v !== "" && /^-?\d+(\.\d+)?$/.test(v)) return Number(v);
@@ -189,7 +215,7 @@ function yq(v) {
   const s = String(v == null ? "" : v);
   if (s === "") return '""';
   if (/^[A-Za-z][A-Za-z0-9 _./()&+'-]*$/.test(s) && !/^(true|false|null|yes|no|on|off)$/i.test(s)) return s;
-  return '"' + s.replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"';
+  return '"' + s.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\r?\n/g, "\\n").replace(/\t/g, "\\t") + '"';
 }
 function objToYAML(obj) {
   return Object.entries(obj).filter(([k]) => k !== "body" && k !== "_slug" && k !== "path")
@@ -229,11 +255,15 @@ function filmToMD(f) {
     `title: ${yq(f.title)}\nvideo_url: ${yq(f.video_url)}\nvideo: ${yq(f.video)}\n` +
     `thumbnail: ${yq(f.thumbnail)}\ntype: ${yq(f.type)}\nyear: ${yq(f.year)}\nlength: ${yq(f.length)}\n` +
     `date: ${yq(f.date)}\ndescription: ${yq(f.description)}\n` +
+    `status: ${yq(f.status === "in-progress" ? "in-progress" : "finished")}\nstage: ${yq(f.stage || "")}\nprogress: ${Math.max(0, Math.min(100, Number(f.progress) || 0))}\n` +
+    `update: ${yq(f.update || "")}\nupdate_date: ${yq(f.update_date || "")}\nrole: ${yq(f.role || "")}\ncredits: ${yq(f.credits || "")}\n` +
+    listYAML("gallery", f.gallery) +
     `featured: ${f.featured === true}\nfeatured_order: ${Number(f.featuredOrder) || 999}\n---\n`;
 }
 function newsToMD(n) {
   return "---\n" +
-    `title: ${yq(n.title)}\ndate: ${yq(n.date)}\nsummary: ${yq(n.summary)}\nimage: ${yq(n.image)}\n---\n` +
+    `title: ${yq(n.title)}\ndate: ${yq(n.date)}\nsummary: ${yq(n.summary)}\nimage: ${yq(n.image)}\n` +
+    listYAML("tags", n.tags) + listYAML("gallery", n.gallery) + "---\n" +
     (n.body || "") + "\n";
 }
 function seriesToMD(s) {
@@ -272,6 +302,10 @@ async function loadAll() {
       thumbnail: d.thumbnail || "", type: d.type || "", length: d.length || "",
       year: d.year ? String(d.year) : (d.date ? String(new Date(d.date).getFullYear() || "") : ""),
       date: d.date || "", description: d.description || d.body || "",
+      status: /progress|wip|making|production/i.test(String(d.status || "")) ? "in-progress" : "finished",
+      stage: d.stage || "", progress: Math.max(0, Math.min(100, Number(d.progress) || 0)),
+      update: d.update || "", update_date: d.update_date || "", role: d.role || "", credits: d.credits || "",
+      gallery: arr(d.gallery),
       featured: truthy(d.featured), featuredOrder: Number(d.featured_order) || 999
     };
   }))).sort((a, b) => String(b.date).localeCompare(String(a.date)));
@@ -281,7 +315,7 @@ async function loadAll() {
     return {
       path: n.path, slug: n.path.split("/").pop().replace(/\.md$/, ""),
       title: d.title || "", date: d.date || "", summary: d.summary || "",
-      image: d.image || "", body: d.body || ""
+      image: d.image || "", body: d.body || "", tags: arr(d.tags), gallery: arr(d.gallery)
     };
   }))).sort((a, b) => String(b.date).localeCompare(String(a.date)));
 
@@ -363,8 +397,10 @@ function fieldHTML(f, val) {
         <label class="flag"><span class="toggle ${enabledV(val) && val !== "" ? "on" : ""}" data-bool="${f.k}"></span>
         <span data-boollabel="${f.k}">${enabledV(val) && val !== "" ? "On" : "Off"}</span></label>${help}</div>`;
     case "select":
-      control = `<select id="${id}" data-k="${f.k}">${f.options.map(o =>
-        `<option value="${esc(o)}" ${String(val) === String(o) ? "selected" : ""}>${esc(o)}</option>`).join("")}</select>`;
+      control = `<select id="${id}" data-k="${f.k}">${f.options.map(o => {
+        const [ov, ol] = Array.isArray(o) ? o : [o, o];
+        return `<option value="${esc(ov)}" ${String(val) === String(ov) ? "selected" : ""}>${esc(ol)}</option>`;
+      }).join("")}</select>`;
       break;
     case "number":
       control = `<input id="${id}" data-k="${f.k}" type="number" value="${esc(val)}" ${f.min != null ? `min="${f.min}"` : ""} ${f.max != null ? `max="${f.max}"` : ""}>`;
@@ -390,6 +426,10 @@ function fieldHTML(f, val) {
             </div>
           </div>
         </div>${help}</div>`;
+    case "gallery":
+      return `<div class="field ${cls}"><label>${esc(f.label)}</label>
+        <div class="gal" data-gallery="${f.k}">${arr(val).map(p => galItemHTML({ path: p })).join("")}
+          <button type="button" class="galadd" data-galadd>+ Add pictures</button></div>${help}</div>`;
     case "pairs":
       return `<div class="field ${cls}"><label>${esc(f.label)}</label>
         <div class="repeater" data-pairs="${f.k}">
@@ -403,8 +443,13 @@ function fieldHTML(f, val) {
 }
 function mediaPreviewHTML(f, val) {
   if (!val) return `<div class="prev">none</div>`;
-  if (/\.(mp4|webm|mov|m4v)$/i.test(val)) return `<video class="prev" src="${esc(val)}" muted></video>`;
-  return `<img class="prev" src="${esc(val)}" alt="">`;
+  if (/\.(mp4|webm|mov|m4v)$/i.test(val)) return `<video class="prev" src="${esc(rawUrl(val))}" muted></video>`;
+  return `<img class="prev" src="${imgSrc(val, 160)}" alt="">`;
+}
+function galItemHTML(it) {
+  return `<div class="galitem" ${it.file ? `data-fi="${it.fi}"` : `data-path="${esc(it.path)}"`}>
+    <img src="${it.file ? it.url : imgSrc(it.path, 160)}" alt="">
+    <span class="galbtns"><button type="button" class="iconbtn" data-galmv="-1" title="Move left">←</button><button type="button" class="iconbtn" data-galmv="1" title="Move right">→</button><button type="button" class="iconbtn" data-galdel title="Remove">✕</button></span></div>`;
 }
 function pairRowHTML(row) {
   return `<div class="row"><input data-pk="label" value="${esc(row && row.label || "")}" placeholder="Label">
@@ -424,6 +469,11 @@ function readFields(root, fields, target) {
     if (f.type === "media") {
       const w = $(`[data-media="${f.k}"]`, root);
       if (w) out[f.k] = w.dataset.value != null ? w.dataset.value : (out[f.k] || "");
+      return;
+    }
+    if (f.type === "gallery") {
+      const w = $(`[data-gallery="${f.k}"]`, root);
+      if (w) out[f.k] = $$(".galitem[data-path]", w).map(x => x.dataset.path);
       return;
     }
     if (f.type === "pairs") {
@@ -476,6 +526,32 @@ function bindFields(root) {
       $("[data-name]", w).textContent = "Nothing selected";
     });
   });
+  $$("[data-gallery]", root).forEach(w => {
+    w._files = [];
+    const wire = () => {
+      $$(".galitem", w).forEach(it => {
+        $("[data-galdel]", it).onclick = () => it.remove();
+        $$("[data-galmv]", it).forEach(b => b.onclick = () => {
+          const d = Number(b.dataset.galmv), sib = d < 0 ? it.previousElementSibling : it.nextElementSibling;
+          if (!sib || !sib.classList.contains("galitem")) return;
+          if (d < 0) w.insertBefore(it, sib); else w.insertBefore(sib, it);
+        });
+      });
+    };
+    $("[data-galadd]", w).addEventListener("click", () => {
+      const inp = document.createElement("input");
+      inp.type = "file"; inp.accept = "image/*"; inp.multiple = true;
+      inp.addEventListener("change", () => {
+        Array.from(inp.files).forEach(file => {
+          const fi = w._files.push(file) - 1;
+          $("[data-galadd]", w).insertAdjacentHTML("beforebegin", galItemHTML({ file, fi, url: URL.createObjectURL(file) }));
+        });
+        wire();
+      });
+      inp.click();
+    });
+    wire();
+  });
   $$("[data-pairs]", root).forEach(w => {
     const add = $("[data-addpair]", w);
     add.addEventListener("click", () => {
@@ -495,6 +571,14 @@ async function stagePickers(root, values, changes) {
   for (const w of $$("[data-media]", root)) {
     if (w._file) values[w.dataset.media] = await stageMedia(w._file, changes);
   }
+  for (const w of $$("[data-gallery]", root)) {
+    const list = [];
+    for (const it of $$(".galitem", w)) {
+      if (it.dataset.path) list.push(it.dataset.path);
+      else if (it.dataset.fi != null && w._files[Number(it.dataset.fi)]) list.push(await stageMedia(w._files[Number(it.dataset.fi)], changes));
+    }
+    values[w.dataset.gallery] = list;
+  }
   return values;
 }
 
@@ -504,42 +588,40 @@ function render() {
   if (!S.token) return renderSetup(root);
   if (!S.loaded) {
     root.innerHTML = `<div class="setup splash">
-      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="12" cy="12" r="9"></circle><path d="M12 3v4M12 17v4M3 12h4M17 12h4"></path></svg>
-      <h1 style="font-size:24px;margin-top:18px">Astris Studio</h1>
+      ${logoSVG(56)}
+      <h1 style="font-size:30px;margin-top:18px">Astris Studio</h1>
       <p class="muted" style="margin-top:10px">Loading your library…</p></div>`;
     return;
   }
   const nav = [
-    ["Library", [["dashboard", "Dashboard", ""], ["photos", "Photos", S.photos.length],
-                 ["batch", "Batch Upload", ""], ["films", "Films", S.films.length],
-                 ["news", "News", S.news.length], ["downloads", "Downloads", S.photos.filter(p => p.download).length]]],
+    ["Library", [["dashboard", "Overview", ""], ["batch", "Add photos", ""], ["photos", "Photos", S.photos.length],
+                 ["films", "Films", S.films.length], ["news", "News", S.news.length],
+                 ["downloads", "Downloads", S.photos.filter(p => p.download).length]]],
     ["Organise", [["series", "Series", S.series.length], ["tags", "Tags", new Set(S.photos.flatMap(p => p.tags)).size],
-                  ["banner", "Hero Banner", ""]]],
-    ["Website", [["home", "Homepage", ""], ["pages", "About & Contact", ""], ["settings", "Site Settings", ""]]]
+                  ["featured", "Featured", S.photos.filter(p => p.featured).length + S.films.filter(f => f.featured).length]]],
+    ["Look and feel", [["show", "Showreel &amp; intro", ""], ["transitions", "Transitions", ""]]],
+    ["Pages", [["home", "Home page", ""], ["pages", "Say hello", ""], ["settings", "Site settings", ""]]]
   ];
   root.innerHTML = `<div class="layout">
     <aside class="side">
-      <span class="brand">
-        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"></circle><path d="M12 3v4M12 17v4M3 12h4M17 12h4"></path></svg>
-        <span>ASTRIS<small>STUDIO</small></span>
-      </span>
+      <span class="brand">${logoSVG(22)}<span>ASTRIS<small>STUDIO</small></span></span>
       ${nav.map(([g, items]) => `<div class="group">${g}</div>` + items.map(([id, label, count]) =>
         `<button class="tab ${S.view === id ? "active" : ""}" data-view="${id}">${label}${count !== "" ? `<span class="count">${count}</span>` : ""}</button>`).join("")).join("")}
       <div class="foot">
-        <a href="${SITE_URL}/" target="_blank">View website ↗</a>
-        <a href="${SITE_URL}/admin/cms.html" target="_blank">Classic editor ↗</a>
+        <a href="${SITE_URL}/" target="_blank" rel="noopener">View website ↗</a>
         <span>${esc(S.user ? S.user.login : "")}</span>
         <a href="#" id="logout">Sign out</a>
       </div>
     </aside>
     <main class="main" id="view"></main>
   </div>`;
-  $$(".tab", root).forEach(b => b.addEventListener("click", () => { S.view = b.dataset.view; render(); }));
+  $$(".tab", root).forEach(b => b.addEventListener("click", () => { S.view = b.dataset.view; render(); window.scrollTo(0, 0); }));
   $("#logout").addEventListener("click", e => {
     e.preventDefault(); localStorage.removeItem(TOKEN_KEY); location.reload();
   });
   const views = { dashboard: vDashboard, photos: vPhotos, batch: vBatch, films: vFilms, news: vNews,
-                  downloads: vDownloads, series: vSeries, tags: vTags, banner: vBanner,
+                  downloads: vDownloads, series: vSeries, tags: vTags, featured: vFeatured,
+                  show: vShow, transitions: vTransitions,
                   home: vHome, pages: vPages, settings: vSettings };
   (views[S.view] || vDashboard)($("#view"));
 }
@@ -547,14 +629,15 @@ function render() {
 /* ---------------- setup ---------------- */
 function renderSetup(root) {
   root.innerHTML = `<div class="setup">
+    <div class="setup-logo">${logoSVG(52)}</div>
     <h1>Astris Studio</h1>
-    <p class="muted" style="margin:12px 0 28px">The control centre for your portfolio — photos, films, news, pages and every site setting. It writes straight to your GitHub repository, so it needs a token once per browser.</p>
+    <p class="muted" style="margin:12px 0 28px;font-size:15px">The control centre for your website: photos, films, news, the showreel, the intro, the page transitions and every setting. It is a separate website from the public one, and it saves straight to your GitHub repository, so it needs a key once on each browser.</p>
     <div class="panel">
       <h2>Connect to GitHub</h2>
       <ol>
-        <li>Open <a href="https://github.com/settings/personal-access-tokens/new" target="_blank">Fine-grained personal access tokens</a></li>
-        <li>Repository access → <code>Only select repositories</code> → <code>penguinator128/Astris</code></li>
-        <li>Permissions → Repository permissions → <code>Contents: Read and write</code></li>
+        <li>Open <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Fine-grained personal access tokens</a></li>
+        <li>Repository access: <code>Only select repositories</code>, then pick <code>penguinator128/Astris</code></li>
+        <li>Permissions: Repository permissions: <code>Contents: Read and write</code></li>
         <li>Generate, copy, and paste it below.</li>
       </ol>
       <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap">
@@ -563,19 +646,26 @@ function renderSetup(root) {
       </div>
       <p class="muted" id="tokenMsg" style="margin-top:11px">Stored only in this browser.</p>
     </div>
+    <div class="panel">
+      <h2>Your website address</h2>
+      <p class="hint">Used for the "View website" links. You can change it any time in Site settings.</p>
+      <input id="siteUrlInput" value="${esc(siteUrl())}" style="width:100%">
+    </div>
   </div>`;
   $("#tokenSave").addEventListener("click", async () => {
     const t = $("#tokenInput").value.trim();
     if (!t) return;
-    $("#tokenMsg").textContent = "Checking token…";
+    $("#tokenMsg").textContent = "Checking the key…";
     S.token = t;
     try {
       await gh(`/repos/${REPO}`);
       localStorage.setItem(TOKEN_KEY, t);
+      const u = $("#siteUrlInput").value.trim();
+      if (/^https?:\/\//i.test(u)) localStorage.setItem(SITE_KEY, u);
       boot();
     } catch (e) {
       S.token = "";
-      $("#tokenMsg").textContent = "That token couldn't reach the repository — check its permissions. (" + e.message + ")";
+      $("#tokenMsg").textContent = "That key couldn't reach the repository. Check its permissions. (" + e.message + ")";
     }
   });
 }
@@ -584,37 +674,53 @@ function renderSetup(root) {
 function vDashboard(v) {
   const recent = S.photos.slice(0, 6);
   const stats = [
-    [S.photos.length, "Photos"], [S.films.length, "Films"], [S.news.length, "News posts"],
-    [S.photos.filter(p => p.download).length, "Downloads on"],
+    [S.photos.length, "Photos"], [S.films.filter(f => f.status !== "in-progress").length, "Films"],
+    [S.films.filter(f => f.status === "in-progress").length, "In progress"], [S.news.length, "News posts"],
+    [S.photos.filter(p => p.download).length, "Free downloads"],
     [S.photos.filter(p => p.featured).length + S.films.filter(f => f.featured).length, "Featured"],
-    [S.series.length, "Series"], [new Set(S.photos.flatMap(p => p.tags)).size, "Tags"]
+    [S.series.length, "Series"]
+  ];
+  const introOn = enabledV(S.site.intro_enabled);
+  const checks = [
+    ["Showreel", !!S.site.showreel, S.site.showreel ? "Your showreel is set." : "Upload the one-minute showreel that plays behind every page.", "show"],
+    ["Opening", introOn, introOn ? "The quick opening plays once per visit." : "The opening is switched off.", "show"],
+    ["Films", S.films.length > 0, S.films.length ? S.films.length + " in the gallery." : "Add your first film. A YouTube link is easiest.", "films"],
+    ["Page changes", (S.site.transition_mode || "random") !== "off", "Mode: " + (S.site.transition_mode || "random") + ".", "transitions"]
   ];
   v.innerHTML = `
     <div class="pagehead">
-      <div><h1>Dashboard</h1><div class="sub">Everything on the site, managed from here. Changes publish to the live site within about a minute.</div></div>
+      <div><h1>Overview</h1><div class="sub">Everything on the site, managed from here. Changes go live within about a minute.</div></div>
       <div class="headbtns">
-        <a class="btn btn-ghost" href="${SITE_URL}/" target="_blank">Preview site ↗</a>
-        <button class="btn btn-primary" data-go="batch">+ Batch upload</button>
+        <a class="btn btn-ghost" href="${SITE_URL}/" target="_blank" rel="noopener">View website ↗</a>
+        <button class="btn btn-primary" data-go="batch">+ Add photos</button>
       </div>
     </div>
     <div class="cards">${stats.map(([n, l]) => `<div class="stat"><div class="n">${n}</div><div class="l">${l}</div></div>`).join("")}</div>
+    <div class="panel"><h2>Set-up</h2>
+      <ul class="checks">${checks.map(([n, ok, msg, go]) => `<li class="${ok ? "ok" : ""}"><i></i><b>${n}</b><span>${esc(msg)}</span><button class="btn btn-ghost btn-sm" data-go="${go}">${ok ? "Change" : "Set up"}</button></li>`).join("")}
+        <li id="aiCheck"><i></i><b>AI helper</b><span>Checking…</span></li></ul></div>
     <div class="panel"><h2>Quick actions</h2>
       <div style="display:flex;gap:9px;flex-wrap:wrap">
-        ${[["batch", "Batch upload photos"], ["photos", "Edit photo library"], ["films", "Add / edit films"],
-           ["news", "Write a news post"], ["banner", "Arrange hero banner"], ["series", "Manage series"],
-           ["tags", "Manage tags"], ["home", "Homepage sections"], ["pages", "About & Contact"],
-           ["settings", "Site settings"]]
+        ${[["batch", "Add photos"], ["photos", "Edit the photo library"], ["films", "Add or edit films"],
+           ["news", "Write a news post"], ["show", "Showreel and intro"], ["transitions", "Choose page transitions"],
+           ["featured", "Arrange featured"], ["home", "Home page"], ["pages", "Say hello page"], ["settings", "Site settings"]]
           .map(([g, l]) => `<button class="btn btn-ghost btn-sm" data-go="${g}">${l}</button>`).join("")}
       </div></div>
-    <div class="panel panel-flush"><div style="padding:20px 22px 0"><h2>Recent uploads</h2></div>
+    <div class="panel panel-flush"><div style="padding:20px 22px 0"><h2>Recent photos</h2></div>
       ${recent.length ? `<table class="grid"><thead><tr><th></th><th>Title</th><th>Date</th><th>Series</th><th>Flags</th></tr></thead><tbody>
-        ${recent.map(p => `<tr><td><img class="thumb" src="${esc(p.image)}" loading="lazy"></td>
+        ${recent.map(p => `<tr><td><img class="thumb" src="${imgSrc(p.image, 160)}" loading="lazy" alt=""></td>
           <td>${esc(p.title)}</td><td class="muted">${esc(String(p.date).slice(0, 10))}</td>
           <td>${p.series.map(s => `<span class="pill">${esc(s)}</span>`).join("")}</td>
           <td>${p.featured ? '<span class="pill pill-accent">featured</span>' : ""}${p.download ? '<span class="pill pill-ok">download</span>' : ""}</td>
-        </tr>`).join("")}</tbody></table>` : `<p class="muted" style="padding:0 22px 22px">No photos yet — start with a batch upload.</p>`}
+        </tr>`).join("")}</tbody></table>` : `<p class="muted" style="padding:0 22px 22px">No photos yet. Start with Add photos.</p>`}
     </div>`;
-  $$("[data-go]", v).forEach(b => b.addEventListener("click", () => { S.view = b.dataset.go; render(); }));
+  $$("[data-go]", v).forEach(b => b.addEventListener("click", () => { S.view = b.dataset.go; render(); window.scrollTo(0, 0); }));
+  aiReady().then(ok => {
+    const li = $("#aiCheck", v); if (!li) return;
+    li.className = ok ? "ok" : "";
+    $("span", li).textContent = ok ? "Ready. Look for the ✨ buttons next to titles and descriptions."
+      : "Not switched on yet. Add ANTHROPIC_API_KEY to this Studio's Vercel project (see the README).";
+  });
 }
 
 /* ---------------- batch upload ---------------- */
@@ -666,6 +772,7 @@ function vBatch(v) {
       <label class="flag"><span class="toggle" id="bFeat"></span>Featured</label>
       <label class="flag"><span class="toggle" id="bDl"></span>Download</label>
       <button class="btn btn-ghost btn-sm" id="bApply">Apply</button>
+      <button class="btn btn-ghost btn-sm" id="bAI">✨ Suggest titles &amp; descriptions</button>
     </div>` : ""}
     <div id="rows" style="margin-top:16px"></div>
     <datalist id="seriesList">${S.series.map(s => `<option value="${esc(s.title)}">`).join("")}</datalist>
@@ -687,6 +794,17 @@ function vBatch(v) {
   const bf = $("#bFeat", v), bd = $("#bDl", v);
   if (bf) bf.addEventListener("click", () => bf.classList.toggle("on"));
   if (bd) bd.addEventListener("click", () => bd.classList.toggle("on"));
+  const bai = $("#bAI", v);
+  if (bai) bai.addEventListener("click", async () => {
+    showProgress("Suggesting titles and descriptions");
+    let done = 0;
+    for (const r of S.batch) {
+      setProgress(done / S.batch.length, `Looking at ${r.file.name}…`);
+      try { await aiBatchRowCore(r); } catch (e) { hideProgress(); toast(e.message, "err"); return render(); }
+      done++;
+    }
+    hideProgress(); render(); toast(`Suggestions added to ${done} photos. Read them over, then publish.`, "ok");
+  });
   const ba = $("#bApply", v);
   if (ba) ba.addEventListener("click", () => {
     const ser = splitCSV($("#bSeries", v).value), tg = splitCSV($("#bTags", v).value);
@@ -713,6 +831,7 @@ function batchRowHTML(r, i) {
       </div>
       ${r.featured ? '<span class="pill pill-accent">featured</span>' : ""}
       ${r.download ? '<span class="pill pill-ok">download</span>' : ""}
+      <button class="iconbtn" data-act="ai" title="Suggest title and description">✨</button>
       <button class="iconbtn" data-act="dup" title="Duplicate">⧉</button>
       <button class="iconbtn" data-act="del" title="Remove">✕</button>
       <button class="iconbtn" data-act="fold">${r.collapsed ? "▸" : "▾"}</button>
@@ -747,6 +866,7 @@ function bindBatchRow(rows, r, i) {
   $$("[data-act]", el).forEach(b => b.addEventListener("click", e => {
     e.stopPropagation();
     const a = b.dataset.act;
+    if (a === "ai") { aiBatchRow(r, b).then(ok => { if (ok) render(); }); return; }
     if (a === "del") S.batch.splice(i, 1);
     if (a === "dup") S.batch.splice(i + 1, 0, { ...r, series: [...r.series], tags: [...r.tags] });
     if (a === "fold") r.collapsed = !r.collapsed;
@@ -809,6 +929,7 @@ function vPhotos(v) {
       <button class="btn btn-ghost btn-sm" data-bulk="featOff">Unfeature</button>
       <button class="btn btn-ghost btn-sm" data-bulk="dlOn">Downloads on</button>
       <button class="btn btn-ghost btn-sm" data-bulk="dlOff">Downloads off</button>
+      <button class="btn btn-ghost btn-sm" data-bulk="ai">✨ Suggest titles</button>
       <button class="btn btn-danger btn-sm" data-bulk="delete">Delete</button>
     </div>` : ""}
     <datalist id="seriesList">${S.series.map(s => `<option value="${esc(s.title)}">`).join("")}</datalist>
@@ -818,7 +939,7 @@ function vPhotos(v) {
     </tr></thead><tbody>
       ${S.photos.map((p, i) => `<tr data-i="${i}" class="${S.dirty.has(p.slug) ? "dirty" : ""}">
         <td><input type="checkbox" class="rowSel" ${sel.has(p.slug) ? "checked" : ""}></td>
-        <td><img class="thumb" src="${esc(p.image)}" loading="lazy"></td>
+        <td><img class="thumb" src="${imgSrc(p.image, 160)}" loading="lazy"></td>
         <td style="min-width:150px"><input data-f="title" value="${esc(p.title)}" style="width:100%"></td>
         <td style="min-width:220px">
           <input data-f="series" list="seriesList" value="${esc(p.series.join(", "))}" placeholder="series" style="width:100%;margin-bottom:5px">
@@ -860,6 +981,7 @@ function vPhotos(v) {
   $$("[data-bulk]", v).forEach(b => b.addEventListener("click", async () => {
     const picked = S.photos.filter(p => S.sel.has(p.slug));
     const a = b.dataset.bulk;
+    if (a === "ai") { await aiBulkPhotos(picked); return; }
     if (a === "delete") { if (confirm(`Delete ${picked.length} photos permanently?`)) await deletePhotos(picked); return; }
     if (a === "apply") {
       const ser = splitCSV($("#bSeries", v).value), tg = splitCSV($("#bTags", v).value);
@@ -930,7 +1052,7 @@ function openPhotoDrawer(p) {
   openDrawer({
     title: p.title || "Photo",
     fields: PHOTO_FIELDS, values: p,
-    extra: `<img src="${esc(p.image)}" style="width:100%;border-radius:7px;margin-bottom:20px">`,
+    extra: `<img src="${imgSrc(p.image, 1024)}" style="width:100%;border-radius:7px;margin-bottom:14px">` + aiBarHTML("Suggest title &amp; description"),
     onSave: async (vals, changes) => {
       Object.assign(p, vals, { featuredOrder: Number(vals.featuredOrder) || 999 });
       changes.push({ path: p.path, content: photoToMD(p) });
@@ -938,33 +1060,43 @@ function openPhotoDrawer(p) {
     },
     onDelete: async () => { await deletePhotos([p]); }
   });
+  bindAI(S.drawer.el, "photo", p);
 }
 
 /* ---------------- films ---------------- */
 const FILM_FIELDS = [
   { k: "title", label: "Film title", span: 2 },
   { k: "type", label: "Film type", type: "select", options: ["", ...FILM_TYPES], span: 2 },
-  { k: "description", label: "Description", type: "textarea", rows: 3, span: 4 },
-  { k: "video_url", label: "YouTube / Vimeo URL", span: 4, help: "Preferred — paste a link and the thumbnail is generated automatically." },
-  { k: "video", label: "Or upload a video file", type: "media", accept: "video/*", span: 2 },
+  { k: "status", label: "Status", type: "select", options: [["finished", "Finished"], ["in-progress", "In progress"]], span: 2,
+    help: "In progress shows a banner and a progress bar on the Films page." },
+  { k: "stage", label: "Stage (if in progress)", type: "select", options: ["", ...STAGES] },
+  { k: "progress", label: "Progress %", type: "number", min: 0, max: 100 },
+  { k: "update", label: "Latest update", span: 4, help: "One line under the progress bar, e.g. Rough cut done, colour next." },
+  { k: "update_date", label: "Update date", type: "datetime", span: 2 },
+  { k: "date", label: "Date made (or aiming for)", type: "datetime", span: 2 },
+  { k: "description", label: "Description", type: "textarea", rows: 4, span: 4, help: "Markdown works: **bold**, [links](https://…), - lists." },
+  { k: "video_url", label: "YouTube or Vimeo link", span: 4, help: "Best for full films: paste the link and the thumbnail is made for you. GitHub can't hold large video files." },
+  { k: "video", label: "Or a small video file", type: "media", accept: "video/*", span: 2, help: "Only for short clips, under about 50 MB." },
   { k: "thumbnail", label: "Thumbnail", type: "media", accept: "image/*", span: 2 },
+  { k: "gallery", label: "Stills and behind-the-scenes pictures", type: "gallery", span: 4 },
   { k: "year", label: "Year" }, { k: "length", label: "Length", placeholder: "4 min 10s" },
-  { k: "date", label: "Date made", type: "datetime", span: 2 },
-  { k: "featured", label: "Featured (hero banner)", type: "bool" },
-  { k: "featuredOrder", label: "Banner order", type: "number" }
+  { k: "role", label: "Your role", span: 2, placeholder: "Director, camera, edit" },
+  { k: "credits", label: "Credits", type: "textarea", rows: 3, span: 4, help: "Cast, music and thanks. One per line." },
+  { k: "featured", label: "Featured", type: "bool" },
+  { k: "featuredOrder", label: "Featured order", type: "number" }
 ];
 function vFilms(v) {
   v.innerHTML = `
     <div class="pagehead">
-      <div><h1>Films</h1><div class="sub">Year and type appear as badges on the public film cards. Link YouTube or Vimeo, or upload a file directly.</div></div>
-      <div class="headbtns"><a class="btn btn-ghost" href="${SITE_URL}/#/films" target="_blank">Preview ↗</a>
+      <div><h1>Films</h1><div class="sub">Finished films and the ones still being made, together in one gallery. In-progress films get a banner and a progress bar. For full films, link YouTube or Vimeo.</div></div>
+      <div class="headbtns"><a class="btn btn-ghost" href="${SITE_URL}/#/films" target="_blank" rel="noopener">View page ↗</a>
       <button class="btn btn-primary" id="newFilm">+ New film</button></div>
     </div>
     <div class="panel panel-flush">${S.films.length ? `<table class="grid">
       <thead><tr><th></th><th>Title</th><th>Type</th><th>Year</th><th>Source</th><th>Featured</th><th></th></tr></thead>
       <tbody>${S.films.map((f, i) => `<tr data-i="${i}">
-        <td>${f.thumbnail ? `<img class="thumb" src="${esc(f.thumbnail)}" loading="lazy">` : `<div class="thumb"></div>`}</td>
-        <td><strong>${esc(f.title)}</strong></td>
+        <td>${f.thumbnail ? `<img class="thumb" src="${imgSrc(f.thumbnail, 160)}" loading="lazy">` : `<div class="thumb"></div>`}</td>
+        <td><strong>${esc(f.title)}</strong>${f.status === "in-progress" ? ` <span class="pill pill-accent">in progress${f.stage ? " · " + esc(f.stage) : ""} ${Number(f.progress) || 0}%</span>` : ""}</td>
         <td>${f.type ? `<span class="pill">${esc(f.type)}</span>` : '<span class="muted">—</span>'}</td>
         <td class="muted">${esc(f.year || "")}</td>
         <td class="muted">${f.video_url ? "Link" : f.video ? "Uploaded file" : "—"}</td>
@@ -992,13 +1124,17 @@ function vFilms(v) {
 function openFilmDrawer(f) {
   const isNew = !f;
   const val = f || { title: "", video_url: "", video: "", thumbnail: "", type: "", year: String(new Date().getFullYear()),
-                     length: "", date: new Date().toISOString(), description: "", featured: false, featuredOrder: 999 };
+                     length: "", date: new Date().toISOString(), description: "", status: "finished", stage: "", progress: 0,
+                     update: "", update_date: "", role: "", credits: "", gallery: [], featured: false, featuredOrder: 999 };
   openDrawer({
     title: isNew ? "New film" : val.title,
     fields: FILM_FIELDS, values: val,
+    extra: aiBarHTML("Suggest a description"),
     onSave: async (vals, changes) => {
-      const film = { ...val, ...vals, featuredOrder: Number(vals.featuredOrder) || 999 };
+      const film = { ...val, ...vals, featuredOrder: Number(vals.featuredOrder) || 999, progress: Number(vals.progress) || 0 };
       if (!film.title.trim()) throw new Error("A film needs a title.");
+      if (film.status === "in-progress" && !film.stage) film.stage = STAGES[Math.min(4, Math.floor(film.progress / 20))];
+      if (film.update && !film.update_date) film.update_date = new Date().toISOString();
       if (!film.year && film.date) film.year = String(new Date(film.date).getFullYear());
       const path = isNew
         ? "content/videos/" + uniqueSlug(slugify(film.title), S.slugs.films) + ".md"
@@ -1010,15 +1146,18 @@ function openFilmDrawer(f) {
       await commitOp(`Delete film: ${val.title}`, [{ path: val.path, del: true }]);
     }
   });
+  bindAI(S.drawer.el, "film", val);
 }
 
 /* ---------------- news ---------------- */
 const NEWS_FIELDS = [
   { k: "title", label: "Title", span: 3 },
   { k: "date", label: "Date", type: "datetime" },
+  { k: "tags", label: "Topics", type: "list", span: 2, help: "e.g. Films, Photography, Behind the scenes. They become tabs on the News page." },
   { k: "summary", label: "Summary", type: "textarea", rows: 2, span: 4, help: "Short teaser shown on the news cards." },
-  { k: "image", label: "Featured image", type: "media", accept: "image/*", span: 4 },
-  { k: "body", label: "Body", type: "textarea", rows: 14, span: 4, help: "Markdown: # heading, **bold**, *italic*, - list, > quote, [link](url)." }
+  { k: "image", label: "Main picture", type: "media", accept: "image/*", span: 4 },
+  { k: "body", label: "Post", type: "textarea", rows: 14, span: 4, help: "Markdown: # heading, **bold**, *italic*, - list, > quote, [link](url)." },
+  { k: "gallery", label: "Photos for this post", type: "gallery", span: 4, help: "Shown as a gallery under the text. A click opens them full size." }
 ];
 function vNews(v) {
   v.innerHTML = `
@@ -1030,7 +1169,7 @@ function vNews(v) {
     <div class="panel panel-flush">${S.news.length ? `<table class="grid">
       <thead><tr><th></th><th>Title</th><th>Date</th><th>Summary</th><th></th></tr></thead>
       <tbody>${S.news.map((n, i) => `<tr data-i="${i}">
-        <td>${n.image ? `<img class="thumb" src="${esc(n.image)}" loading="lazy">` : `<div class="thumb"></div>`}</td>
+        <td>${n.image ? `<img class="thumb" src="${imgSrc(n.image, 160)}" loading="lazy">` : `<div class="thumb"></div>`}</td>
         <td><strong>${esc(n.title)}</strong></td>
         <td class="muted" style="white-space:nowrap">${esc(String(n.date).slice(0, 10))}</td>
         <td class="muted">${esc((n.summary || "").slice(0, 70))}</td>
@@ -1049,10 +1188,11 @@ function vNews(v) {
 }
 function openNewsDrawer(n) {
   const isNew = !n;
-  const val = n || { title: "", date: new Date().toISOString(), summary: "", image: "", body: "" };
+  const val = n || { title: "", date: new Date().toISOString(), summary: "", image: "", body: "", tags: [], gallery: [] };
   openDrawer({
     title: isNew ? "New post" : val.title,
     fields: NEWS_FIELDS, values: val,
+    extra: aiBarHTML("Suggest a summary"),
     onSave: async (vals, changes) => {
       const post = { ...val, ...vals };
       if (!post.title.trim()) throw new Error("A post needs a title.");
@@ -1064,6 +1204,7 @@ function openNewsDrawer(n) {
       await commitOp(`Delete news: ${val.title}`, [{ path: val.path, del: true }]);
     }
   });
+  bindAI(S.drawer.el, "news", val);
 }
 
 /* ---------------- downloads ---------------- */
@@ -1077,7 +1218,7 @@ function vDownloads(v) {
     <div class="panel panel-flush">${on.length ? `<table class="grid">
       <thead><tr><th></th><th>Title</th><th>Series</th><th>Download</th></tr></thead><tbody>
       ${on.map(p => `<tr data-slug="${esc(p.slug)}">
-        <td><img class="thumb" src="${esc(p.image)}" loading="lazy"></td>
+        <td><img class="thumb" src="${imgSrc(p.image, 160)}" loading="lazy"></td>
         <td>${esc(p.title)}</td>
         <td>${p.series.map(s => `<span class="pill">${esc(s)}</span>`).join("")}</td>
         <td><span class="toggle on" data-off></span></td></tr>`).join("")}
@@ -1223,183 +1364,129 @@ function vTags(v) {
   });
 }
 
-/* ---------------- hero banner ---------------- */
-const HERO_FIELDS = [
-  { k: "hero_title", label: "Hero title", span: 2, help: "The large word in the centre of the banner." },
-  { k: "hero_subtitle", label: "Hero subtitle", span: 2 },
-  { k: "hero_background", label: "Background source", type: "select", options: ["photos", "videos", "both"], span: 2,
-    help: "Which featured items fill the banner." },
-  { k: "hero_video", label: "Showreel video (optional)", type: "media", accept: "video/*", span: 2,
-    help: "If set, plays as the first hero slide." },
-  { k: "hero_cta_label", label: "Button label", span: 2 },
-  { k: "hero_cta_destination", label: "Button destination", type: "select",
-    options: ["auto", "photography", "films", "news", "about", "contact"], span: 2,
-    help: "'auto' opens the featured item itself." },
-  { k: "hero_autoplay", label: "Auto rotation", type: "bool" },
-  { k: "hero_interval", label: "Interval (seconds)", type: "number", min: 3, max: 20 }
-];
-function vBanner(v) {
+/* ---------------- featured ---------------- */
+function vFeatured(v) {
   const feat = [
     ...S.photos.filter(p => p.featured).map(p => ({ ...p, kind: "photo", ref: p })),
-    ...S.films.filter(f => f.featured).map(f => ({ ...f, kind: "video", ref: f }))
+    ...S.films.filter(f => f.featured).map(f => ({ ...f, kind: "film", ref: f }))
   ].sort((a, b) => a.featuredOrder - b.featuredOrder);
-
+  const pend = S._featPending || (S._featPending = new Set());
   v.innerHTML = `
     <div class="pagehead">
-      <div><h1>Hero banner</h1><div class="sub">The signature banner: your title in the centre, the featured project in a card near the bottom. Slides advance horizontally.</div></div>
-      <div class="headbtns"><a class="btn btn-ghost" href="${SITE_URL}/" target="_blank">Preview ↗</a>
-      <button class="btn btn-primary" id="saveHero">Save banner</button></div>
+      <div><h1>Featured</h1><div class="sub">Featured items front your site: they are the slideshow behind the home page (until your showreel is in), the pictures in the opening A, the footer reel, and the Selected work section. Feature things from the Photos and Films pages, then put them in order here. You can also pick the opening and reel pictures by hand under Showreel &amp; intro.</div></div>
+      <div class="headbtns"><button class="btn btn-primary" id="saveFeat" ${pend.size ? "" : "disabled"}>Save order</button></div>
     </div>
-    <div class="panel"><h2>Banner settings</h2>
-      <div class="formgrid" id="heroForm">${HERO_FIELDS.map(f => fieldHTML(f, S.site[f.k])).join("")}</div></div>
-    <div class="panel panel-flush"><div style="padding:20px 22px 0"><h2>Order</h2>
-      <p class="hint">The first five appear in the banner. Feature photos from the Photos library and films from the Films page.</p></div>
+    <div class="panel panel-flush">
       ${feat.length ? `<table class="grid"><tbody id="rows">
         ${feat.map((x, i) => `<tr data-i="${i}">
           <td class="muted" style="width:34px">${i + 1}</td>
-          <td style="width:130px">${x.kind === "photo"
-            ? `<img class="thumb-lg" src="${esc(x.image)}">`
-            : (x.thumbnail ? `<img class="thumb-lg" src="${esc(x.thumbnail)}">` : `<div class="thumb-lg"></div>`)}</td>
-          <td><strong>${esc(x.title)}</strong>
-            <div><span class="pill ${x.kind === "video" ? "pill-accent" : ""}">${x.kind}</span>
-            ${i < 5 ? '<span class="pill pill-ok">in banner</span>' : '<span class="pill">overflow</span>'}</div></td>
+          <td style="width:130px"><img class="thumb-lg" src="${imgSrc(x.kind === "photo" ? x.image : x.thumbnail, 160)}" alt=""></td>
+          <td><strong>${esc(x.title)}</strong><div><span class="pill ${x.kind === "film" ? "pill-accent" : ""}">${x.kind}</span></div></td>
           <td style="text-align:right;white-space:nowrap">
             <button class="iconbtn" data-m="up" ${i === 0 ? "disabled" : ""}>↑</button>
             <button class="iconbtn" data-m="down" ${i === feat.length - 1 ? "disabled" : ""}>↓</button>
-            <button class="iconbtn" data-m="out" title="Remove from banner">✕</button></td></tr>`).join("")}
-      </tbody></table>` : `<p class="muted" style="padding:0 22px 22px">Nothing featured yet — feature photos or films to fill the banner.</p>`}</div>`;
-
-  bindFields($("#heroForm", v));
-  const pending = new Set();
-  $$("#rows tr", v).forEach(tr => {
-    $$("[data-m]", tr).forEach(b => b.addEventListener("click", () => {
-      const i = Number(tr.dataset.i), m = b.dataset.m;
-      if (m === "up" && i > 0) [feat[i - 1], feat[i]] = [feat[i], feat[i - 1]];
-      if (m === "down" && i < feat.length - 1) [feat[i + 1], feat[i]] = [feat[i], feat[i + 1]];
-      if (m === "out") { feat[i].ref.featured = false; pending.add(feat[i].ref); feat.splice(i, 1); }
-      feat.forEach((x, k) => {
-        if (x.ref.featuredOrder !== k + 1) { x.ref.featuredOrder = k + 1; pending.add(x.ref); }
-      });
-      S._heroPending = pending;
-      vBanner(v);
-      if (S._heroPending) S._heroPending.forEach(p => pending.add(p));
-    }));
-  });
-  if (S._heroPending) { S._heroPending.forEach(p => pending.add(p)); }
-
-  $("#saveHero", v).addEventListener("click", async () => {
-    showProgress("Saving banner");
-    try {
-      const changes = [];
-      const vals = await stagePickers($("#heroForm", v), readFields($("#heroForm", v), HERO_FIELDS, {}), changes);
-      Object.assign(S.site, vals);
-      changes.push({ path: PATHS.site, content: objToYAML(S.site) });
-      pending.forEach(item => {
-        const isPhoto = S.photos.includes(item);
-        changes.push({ path: item.path, content: isPhoto ? photoToMD(item) : filmToMD(item) });
-      });
-      await commitFiles("Update hero banner via Astris Studio", changes);
-      S._heroPending = null;
-      hideProgress(); toast("Banner saved ✓", "ok");
-      await reload();
-    } catch (e) { hideProgress(); toast("Save failed: " + e.message, "err"); }
+            <button class="iconbtn" data-m="out" title="Remove from featured">✕</button></td></tr>`).join("")}
+      </tbody></table>` : `<p class="muted" style="padding:22px">Nothing is featured yet. Switch on Featured for photos and films to fill this list.</p>`}</div>`;
+  $$("#rows tr", v).forEach(tr => $$("[data-m]", tr).forEach(b => b.addEventListener("click", () => {
+    const i = Number(tr.dataset.i), m = b.dataset.m;
+    if (m === "up" && i > 0) [feat[i - 1], feat[i]] = [feat[i], feat[i - 1]];
+    if (m === "down" && i < feat.length - 1) [feat[i + 1], feat[i]] = [feat[i], feat[i + 1]];
+    if (m === "out") { feat[i].ref.featured = false; pend.add(feat[i].ref); feat.splice(i, 1); }
+    feat.forEach((x, k) => { if (x.ref.featuredOrder !== k + 1) { x.ref.featuredOrder = k + 1; pend.add(x.ref); } });
+    vFeatured(v);
+  })));
+  $("#saveFeat", v).addEventListener("click", async () => {
+    const changes = [...pend].map(item => ({ path: item.path, content: S.photos.includes(item) ? photoToMD(item) : filmToMD(item) }));
+    S._featPending = new Set();
+    await commitOp("Update featured order", changes);
   });
 }
 
-/* ---------------- homepage sections ---------------- */
+/* ---------------- home page ---------------- */
+const HERO_FIELDS = [
+  { k: "hero_title", label: "The big word", span: 2, help: "The large word in the middle of the first screen." },
+  { k: "hero_subtitle", label: "The thin word underneath", span: 2 },
+  { k: "home_cta_label", label: "Button label", span: 2 },
+  { k: "home_cta_link", label: "Button goes to", type: "select", span: 2,
+    options: [["#/films", "Films"], ["#/photography", "Photography"], ["#/news", "News"], ["#/hello", "Say hello"]] }
+];
 const HOME_SECTIONS = [
-  { key: "photos", name: "Latest Photos", fields: [
-    { k: "home_photos_enabled", label: "Visible", type: "bool" },
-    { k: "home_photos_order", label: "Order", type: "number" },
-    { k: "home_latest_photos_kicker", label: "Kicker" },
-    { k: "home_latest_photos_heading", label: "Heading" },
-    { k: "home_latest_photos_link", label: "Link label" }] },
-  { key: "films", name: "Latest Films", fields: [
-    { k: "home_films_enabled", label: "Visible", type: "bool" },
-    { k: "home_films_order", label: "Order", type: "number" },
-    { k: "home_latest_films_kicker", label: "Kicker" },
-    { k: "home_latest_films_heading", label: "Heading" },
-    { k: "home_latest_films_link", label: "Link label" }] },
-  { key: "selected", name: "Selected Work", fields: [
-    { k: "home_selected_enabled", label: "Visible", type: "bool" },
-    { k: "home_selected_order", label: "Order", type: "number" },
-    { k: "home_selected_kicker", label: "Kicker" },
-    { k: "home_selected_heading", label: "Heading" },
-    { k: "home_selected_intro", label: "Intro", span: 2 }] },
-  { key: "about", name: "About Preview", fields: [
-    { k: "home_about_enabled", label: "Visible", type: "bool" },
-    { k: "home_about_order", label: "Order", type: "number" }] },
-  { key: "news", name: "News Preview", fields: [
-    { k: "home_news_enabled", label: "Visible", type: "bool" },
-    { k: "home_news_order", label: "Order", type: "number" },
-    { k: "home_news_kicker", label: "Kicker" },
-    { k: "home_news_heading", label: "Heading" },
-    { k: "home_news_link", label: "Link label" }] }
+  { key: "films", name: "Latest films", fields: [
+    { k: "home_films_enabled", label: "Show", type: "bool" }, { k: "home_films_order", label: "Order", type: "number" },
+    { k: "home_latest_films_heading", label: "Heading" }, { k: "home_latest_films_link", label: "Link label" }] },
+  { key: "photos", name: "Latest photos", fields: [
+    { k: "home_photos_enabled", label: "Show", type: "bool" }, { k: "home_photos_order", label: "Order", type: "number" },
+    { k: "home_latest_photos_heading", label: "Heading" }, { k: "home_latest_photos_link", label: "Link label" }] },
+  { key: "selected", name: "Selected work", fields: [
+    { k: "home_selected_enabled", label: "Show", type: "bool" }, { k: "home_selected_order", label: "Order", type: "number" },
+    { k: "home_selected_heading", label: "Heading" }, { k: "home_selected_intro", label: "Intro line", span: 2 }] },
+  { key: "about", name: "Hi, I'm Josh (the bio)", fields: [
+    { k: "home_about_enabled", label: "Show", type: "bool" }, { k: "home_about_order", label: "Order", type: "number" }] },
+  { key: "news", name: "News", fields: [
+    { k: "home_news_enabled", label: "Show", type: "bool" }, { k: "home_news_order", label: "Order", type: "number" },
+    { k: "home_news_heading", label: "Heading" }, { k: "home_news_link", label: "Link label" }] }
 ];
 function vHome(v) {
   v.innerHTML = `
     <div class="pagehead">
-      <div><h1>Homepage</h1><div class="sub">Rename, reorder or hide any section of the homepage. Lower order numbers appear first.</div></div>
-      <div class="headbtns"><a class="btn btn-ghost" href="${SITE_URL}/" target="_blank">Preview ↗</a>
-      <button class="btn btn-primary" id="saveHome">Save homepage</button></div>
+      <div><h1>Home page</h1><div class="sub">The first screen, then the sections below it. Rename, reorder or hide any of them. Lower order numbers come first. Empty sections (no films yet, say) hide themselves.</div></div>
+      <div class="headbtns"><a class="btn btn-ghost" href="${SITE_URL}/" target="_blank" rel="noopener">View website ↗</a>
+      <button class="btn btn-primary" id="saveHome">Save home page</button></div>
     </div>
+    <div class="panel"><h2>First screen</h2>
+      <div class="formgrid" id="heroForm">${HERO_FIELDS.map(f => fieldHTML(f, S.site[f.k])).join("")}</div></div>
     <div id="homeForm">
-      ${HOME_SECTIONS.map(s => `<div class="panel"><h2>${esc(s.name)}</h2>
-        <div class="formgrid">${s.fields.map(f => fieldHTML(f, S.site[f.k])).join("")}</div></div>`).join("")}
+      ${HOME_SECTIONS.map(sec => `<div class="panel"><h2>${esc(sec.name)}</h2>
+        <div class="formgrid">${sec.fields.map(f => fieldHTML(f, S.site[f.k])).join("")}</div></div>`).join("")}
     </div>
-    <div class="panel"><h2>About preview text</h2>
-      <p class="hint">Shown in the About band on the homepage.</p>
+    <div class="panel"><h2>The bio text</h2>
+      <p class="hint">Shown beside your silhouette picture on the home page.</p>
       <div class="formgrid" id="aboutPrev">
         ${fieldHTML({ k: "home_heading", label: "Heading", span: 2 }, S.about.home_heading)}
         ${fieldHTML({ k: "home_text", label: "Text", type: "textarea", rows: 2, span: 2 }, S.about.home_text)}
       </div></div>`;
   bindFields(v);
   $("#saveHome", v).addEventListener("click", async () => {
-    showProgress("Saving homepage");
+    showProgress("Saving home page");
     try {
-      const all = HOME_SECTIONS.flatMap(s => s.fields);
-      Object.assign(S.site, readFields($("#homeForm", v), all, {}));
-      Object.assign(S.about, readFields($("#aboutPrev", v),
-        [{ k: "home_heading" }, { k: "home_text" }], {}));
-      await commitFiles("Update homepage sections via Astris Studio", [
+      const all = HOME_SECTIONS.flatMap(sec => sec.fields);
+      Object.assign(S.site, readFields($("#heroForm", v), HERO_FIELDS, {}), readFields($("#homeForm", v), all, {}));
+      Object.assign(S.about, readFields($("#aboutPrev", v), [{ k: "home_heading" }, { k: "home_text" }], {}));
+      await commitFiles("Update home page via Astris Studio", [
         { path: PATHS.site, content: objToYAML(S.site) },
         { path: PATHS.about, content: objToYAML(S.about) }
       ]);
-      hideProgress(); toast("Homepage saved ✓", "ok");
+      hideProgress(); toast("Home page saved ✓", "ok");
     } catch (e) { hideProgress(); toast("Save failed: " + e.message, "err"); }
   });
 }
 
-/* ---------------- about & contact ---------------- */
+/* ---------------- say hello (about + contact) ---------------- */
 const ABOUT_FIELDS = [
-  { k: "kicker", label: "Kicker" }, { k: "heading", label: "Heading", span: 3 },
-  { k: "intro", label: "Intro", type: "textarea", rows: 2, span: 4 },
-  { k: "image", label: "Profile photo", type: "media", accept: "image/*", span: 2 },
-  { k: "capabilities", label: "Capabilities", type: "list", span: 2, help: "Shown as chips." },
-  { k: "body", label: "Biography", type: "textarea", rows: 10, span: 4, help: "Markdown supported." },
-  { k: "button_label", label: "Button label", span: 2 },
-  { k: "button_url", label: "Button destination", span: 2, help: "e.g. #/contact" },
+  { k: "intro", label: "One-line intro", type: "textarea", rows: 2, span: 4 },
+  { k: "image", label: "Profile photo", type: "media", accept: "image/*", span: 2, help: "Leave empty to use your yellow silhouette picture." },
+  { k: "capabilities", label: "What you do", type: "list", span: 2, help: "Shown as a line, e.g. Photography · Filmmaking · Editing." },
+  { k: "body", label: "Longer bio (optional)", type: "textarea", rows: 8, span: 4, help: "Markdown works. Shown under the contact details." },
   { k: "links", label: "Extra links", type: "pairs", span: 4 }
 ];
 const CONTACT_FIELDS = [
-  { k: "kicker", label: "Kicker" }, { k: "heading", label: "Heading", span: 3 },
-  { k: "intro", label: "Intro", type: "textarea", rows: 2, span: 4 },
-  { k: "email", label: "Work email", span: 2 },
+  { k: "intro", label: "Short line under SAY HELLO", type: "textarea", rows: 2, span: 4 },
+  { k: "email", label: "Email", span: 2 },
   { k: "email_note", label: "Note under the email", span: 2 },
   { k: "location", label: "Based in", span: 2 },
   { k: "availability", label: "Availability", span: 2 },
-  { k: "socials", label: "Social links", type: "pairs", span: 4, help: "Only links with a URL are shown." }
+  { k: "socials", label: "Social links", type: "pairs", span: 4, help: "Only links with a web address are shown. YouTube always appears." }
 ];
 function vPages(v) {
   v.innerHTML = `
     <div class="pagehead">
-      <div><h1>About &amp; Contact</h1><div class="sub">Everything on both pages. The contact page shows your details only — there is no form, by design.</div></div>
-      <div class="headbtns"><a class="btn btn-ghost" href="${SITE_URL}/#/about" target="_blank">Preview ↗</a>
+      <div><h1>Say hello</h1><div class="sub">Your bio, your details and your links, all on the Say hello page. There's no contact form: people email you directly.</div></div>
+      <div class="headbtns"><a class="btn btn-ghost" href="${SITE_URL}/#/hello" target="_blank" rel="noopener">View page ↗</a>
       <button class="btn btn-primary" id="savePages">Save pages</button></div>
     </div>
-    <div class="panel"><h2>About page</h2><div class="formgrid" id="aboutForm">
+    <div class="panel"><h2>About you</h2><div class="formgrid" id="aboutForm">
       ${ABOUT_FIELDS.map(f => fieldHTML(f, S.about[f.k])).join("")}</div></div>
-    <div class="panel"><h2>Contact page</h2><div class="formgrid" id="contactForm">
+    <div class="panel"><h2>Contact details</h2><div class="formgrid" id="contactForm">
       ${CONTACT_FIELDS.map(f => fieldHTML(f, S.contact[f.k])).join("")}</div></div>`;
   bindFields(v);
   $("#savePages", v).addEventListener("click", async () => {
@@ -1411,7 +1498,7 @@ function vPages(v) {
       Object.assign(S.contact, await stagePickers(cRoot, readFields(cRoot, CONTACT_FIELDS, {}), changes));
       changes.push({ path: PATHS.about, content: objToYAML(S.about) });
       changes.push({ path: PATHS.contact, content: objToYAML(S.contact) });
-      await commitFiles("Update About & Contact via Astris Studio", changes);
+      await commitFiles("Update Say hello page via Astris Studio", changes);
       hideProgress(); toast("Pages saved ✓", "ok");
       await reload();
     } catch (e) { hideProgress(); toast("Save failed: " + e.message, "err"); }
@@ -1422,33 +1509,40 @@ function vPages(v) {
 const SETTINGS_GROUPS = [
   { name: "Brand", fields: [
     { k: "brand", label: "Brand name", span: 2 }, { k: "tagline", label: "Tagline", span: 2 }] },
-  { name: "Page headers", fields: [
-    { k: "photography_kicker", label: "Photography kicker" }, { k: "photography_heading", label: "Photography heading" },
-    { k: "photography_intro", label: "Photography intro", span: 2 },
-    { k: "films_kicker", label: "Films kicker" }, { k: "films_heading", label: "Films heading" },
-    { k: "films_intro", label: "Films intro", span: 2 },
-    { k: "downloads_kicker", label: "Downloads kicker" }, { k: "downloads_heading", label: "Downloads heading" },
-    { k: "downloads_intro", label: "Downloads intro", span: 2 },
-    { k: "news_kicker", label: "News kicker" }, { k: "news_heading", label: "News heading" },
-    { k: "news_intro", label: "News intro", span: 2 }] },
-  { name: "Navigation labels", fields: [
-    { k: "nav_home", label: "Home" }, { k: "nav_films", label: "Films" },
-    { k: "nav_photography", label: "Photography" }, { k: "nav_downloads", label: "Downloads" },
-    { k: "nav_news", label: "News" }, { k: "nav_about", label: "About" }, { k: "nav_contact", label: "Contact" }] },
+  { name: "Page headings", fields: [
+    { k: "films_heading", label: "Films heading" }, { k: "films_intro", label: "Films intro", span: 2 },
+    { k: "photography_heading", label: "Photography heading" }, { k: "photography_intro", label: "Photography intro", span: 2 },
+    { k: "news_heading", label: "News heading" }, { k: "news_intro", label: "News intro", span: 2 },
+    { k: "hello_heading", label: "Say hello heading" }] },
+  { name: "Menu labels", fields: [
+    { k: "nav_home", label: "Home" }, { k: "nav_films", label: "Films" }, { k: "nav_photography", label: "Photography" },
+    { k: "nav_news", label: "News" }, { k: "nav_hello", label: "Say hello" }] },
   { name: "Footer", fields: [
-    { k: "footer_text", label: "Copyright / footer text", span: 2 },
-    { k: "footer_note", label: "Extra note", span: 2 }] }
+    { k: "footer_text", label: "Copyright line", span: 2 }, { k: "footer_name", label: "Your name" },
+    { k: "footer_note", label: "Extra note", span: 2 }] },
+  { name: "Pictures", fields: [
+    { k: "image_optimize", label: "Lighter copies of pictures", type: "bool", span: 4,
+      help: "Keeps the site quick by showing smaller copies. Free downloads always give the full-size original. Turn this off only if pictures ever fail to show." }] }
 ];
 function vSettings(v) {
   v.innerHTML = `
     <div class="pagehead">
-      <div><h1>Site settings</h1><div class="sub">Headings, navigation labels and footer text across the whole site — no code required.</div></div>
-      <div class="headbtns"><a class="btn btn-ghost" href="${SITE_URL}/" target="_blank">Preview ↗</a>
+      <div><h1>Site settings</h1><div class="sub">Headings, menu labels and footer text across the whole site. No code needed.</div></div>
+      <div class="headbtns"><a class="btn btn-ghost" href="${SITE_URL}/" target="_blank" rel="noopener">View website ↗</a>
       <button class="btn btn-primary" id="saveSettings">Save settings</button></div>
     </div>
     <div id="setForm">${SETTINGS_GROUPS.map(g => `<div class="panel"><h2>${esc(g.name)}</h2>
-      <div class="formgrid">${g.fields.map(f => fieldHTML(f, S.site[f.k])).join("")}</div></div>`).join("")}</div>`;
+      <div class="formgrid">${g.fields.map(f => fieldHTML(f, S.site[f.k])).join("")}</div></div>`).join("")}</div>
+    <div class="panel"><h2>This Studio</h2>
+      <p class="hint">Where "View website" links go. Saved in this browser only.</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap"><input id="siteUrl" value="${esc(siteUrl())}" style="flex:1;min-width:260px">
+      <button class="btn btn-ghost" id="saveSiteUrl">Save address</button></div></div>`;
   bindFields(v);
+  $("#saveSiteUrl", v).addEventListener("click", () => {
+    const u = $("#siteUrl", v).value.trim();
+    if (!/^https?:\/\//i.test(u)) return toast("The address should start with https://", "err");
+    localStorage.setItem(SITE_KEY, u); toast("Address saved ✓", "ok");
+  });
   $("#saveSettings", v).addEventListener("click", async () => {
     showProgress("Saving settings");
     try {
@@ -1511,6 +1605,316 @@ async function commitOp(msg, changes) {
     hideProgress(); toast("Done ✓", "ok");
     await reload();
   } catch (e) { hideProgress(); toast("Failed: " + e.message, "err"); }
+}
+
+/* ---------------- items for the opening and the footer reel ---------------- */
+function allItems() {
+  const l = [];
+  S.films.forEach(f => { if (f.thumbnail) l.push({ key: "film/" + f.slug, kind: "Film", title: f.title, img: f.thumbnail, date: f.date }); });
+  S.photos.forEach(p => l.push({ key: "photo/" + p.slug, kind: "Photo", title: p.title || p.slug, img: p.image, date: p.date }));
+  return l.sort((a, b) => String(b.date).localeCompare(String(a.date)));
+}
+function featuredItems(items) {
+  const f = new Set([...S.photos.filter(p => p.featured).map(p => "photo/" + p.slug), ...S.films.filter(x => x.featured).map(x => "film/" + x.slug)]);
+  return items.filter(i => f.has(i.key));
+}
+function chooserHTML(id) {
+  return `<div class="chooser" data-chooser="${id}">
+    <div class="chooser-bar"><span class="muted" data-count></span><button type="button" class="btn btn-ghost btn-sm" data-clear>Back to automatic</button></div>
+    <div class="chgrid">${allItems().map(it => `<button type="button" class="chitem" data-key="${esc(it.key)}" title="${esc(it.title)}"><img src="${imgSrc(it.img, 160)}" alt="" loading="lazy"><b></b><span>${esc(it.title)}</span></button>`).join("")}</div></div>`;
+}
+function bindChooser(root, id, selected) {
+  const w = $(`[data-chooser="${id}"]`, root);
+  const paint = () => {
+    $$(".chitem", w).forEach(b => {
+      const i = selected.indexOf(b.dataset.key);
+      b.classList.toggle("on", i > -1); $("b", b).textContent = i > -1 ? String(i + 1) : "";
+    });
+    $("[data-count]", w).textContent = selected.length
+      ? `${selected.length} chosen, numbered in the order you clicked`
+      : "Automatic: your featured items, or the newest if none are featured";
+  };
+  $$(".chitem", w).forEach(b => b.addEventListener("click", () => {
+    const i = selected.indexOf(b.dataset.key);
+    if (i > -1) selected.splice(i, 1); else selected.push(b.dataset.key);
+    paint();
+  }));
+  $("[data-clear]", w).addEventListener("click", () => { selected.length = 0; paint(); });
+  paint();
+}
+
+/* ---------------- showreel, opening, footer reel, grain ---------------- */
+const SHOW_FIELDS = [
+  { k: "showreel", label: "Showreel video", type: "media", accept: "video/mp4,video/webm", span: 4,
+    help: "Plays silently on a loop behind every page. About a minute is perfect." },
+  { k: "showreel_poster", label: "Poster picture (optional)", type: "media", accept: "image/*", span: 4,
+    help: "Shown while the video loads. A still from the reel works well." }
+];
+const INTRO_FIELDS = [
+  { k: "intro_enabled", label: "Play the opening", type: "bool", help: "Plays once each visit. Visitors can skip it with a click." },
+  { k: "intro_speed", label: "Opening speed", type: "select", options: [["fast", "Fast (under a second)"], ["normal", "Normal (about a second)"], ["relaxed", "Relaxed (a second and a half)"]] },
+  { k: "reel_speed", label: "Footer reel speed", type: "select", options: [["slow", "Slow"], ["normal", "Normal"], ["fast", "Fast"]] },
+  { k: "grain", label: "Film grain", type: "select", options: [["off", "Off"], ["low", "Light"], ["medium", "Medium"], ["high", "Heavy"]] }
+];
+function vShow(v) {
+  const site = S.site;
+  const vals = { intro_enabled: true, intro_speed: "normal", reel_speed: "normal", grain: "medium", ...site };
+  const introSel = arr(site.intro_items).slice(), reelSel = arr(site.reel_items).slice();
+  v.innerHTML = `
+    <div class="pagehead">
+      <div><h1>Showreel &amp; intro</h1><div class="sub">The moving parts at the front of your site: the showreel behind every page, the quick opening, the film reel along the bottom of every page, and the film grain.</div></div>
+      <div class="headbtns"><button class="btn btn-primary" id="saveShow">Save</button></div>
+    </div>
+    <div class="panel"><h2>Showreel</h2>
+      ${site.showreel ? `<video class="reelprev" src="${esc(rawUrl(site.showreel))}" controls muted playsinline preload="metadata"></video>`
+        : `<p class="muted">No showreel yet. Until you add one, a slow slideshow of your featured photos plays instead.</p>`}
+      <div class="formgrid" id="showForm" style="margin-top:14px">${SHOW_FIELDS.map(f => fieldHTML(f, site[f.k])).join("")}</div>
+      <p class="hint" style="margin-top:12px">Tip: export from Premiere as H.264 mp4, 1920×1080, about 3 Mbps, no audio. That is roughly 22 MB a minute, which keeps the site quick. GitHub stops files at 100 MB. Full-length films are better on YouTube, linked from the Films page.</p>
+    </div>
+    <div class="panel"><h2>Opening</h2>
+      <div class="formgrid" id="introForm">${INTRO_FIELDS.slice(0, 2).map(f => fieldHTML(f, vals[f.k])).join("")}</div>
+      <div class="headbtns" style="margin:16px 0 4px"><button class="btn btn-ghost" id="previewIntro">▶ Preview the opening</button></div>
+      <h3 class="h3">Pictures that rip past inside the A</h3>
+      <p class="hint">Click pictures to choose them. They run past in the order you click, and the first one is the picture the camera dives into. On automatic, your featured items are used.</p>
+      ${chooserHTML("intro")}
+    </div>
+    <div class="panel"><h2>Footer reel</h2>
+      <div class="formgrid" id="reelForm">${fieldHTML(INTRO_FIELDS[2], vals.reel_speed)}</div>
+      <p class="hint" style="margin-top:12px">The film reel that rolls along the bottom of every page. Choose what appears on it, or leave it on automatic.</p>
+      ${chooserHTML("reel")}
+    </div>
+    <div class="panel"><h2>Film grain</h2>
+      <div class="formgrid" id="grainForm">${fieldHTML(INTRO_FIELDS[3], vals.grain)}</div></div>`;
+  bindFields(v);
+  bindChooser(v, "intro", introSel); bindChooser(v, "reel", reelSel);
+  $("#previewIntro", v).addEventListener("click", () => previewIntro(introSel, ($("[data-k=intro_speed]", v) || {}).value || "normal"));
+  $("#saveShow", v).addEventListener("click", async () => {
+    const form = $("#showForm", v);
+    const file = ($('[data-media="showreel"]', form) || {})._file;
+    if (file && file.size > 95 * 1048576) return toast("That video is over 95 MB, which is more than GitHub allows. Export a smaller one (see the tip).", "err");
+    if (file && file.size > 45 * 1048576 && !confirm(`That video is ${Math.round(file.size / 1048576)} MB. It will work, but visitors on slow connections may wait. Upload it anyway?`)) return;
+    showProgress("Saving");
+    try {
+      const changes = [];
+      const vals2 = await stagePickers(form, readFields(form, SHOW_FIELDS, {}), changes);
+      Object.assign(S.site, vals2,
+        readFields($("#introForm", v), INTRO_FIELDS.slice(0, 2), {}),
+        readFields($("#reelForm", v), [INTRO_FIELDS[2]], {}),
+        readFields($("#grainForm", v), [INTRO_FIELDS[3]], {}),
+        { intro_items: introSel, reel_items: reelSel });
+      changes.push({ path: PATHS.site, content: objToYAML(S.site) });
+      await commitFiles("Update showreel, intro and reel via Astris Studio", changes,
+        (ci, cn, d, t) => setProgress((ci + d / t) / cn, `Uploading… (${d}/${t})`));
+      hideProgress(); toast("Saved ✓ Live in about a minute.", "ok");
+      await reload();
+    } catch (e) { hideProgress(); toast("Save failed: " + e.message, "err"); }
+  });
+}
+function previewIntro(sel, speed) {
+  const items = allItems();
+  let list = sel.map(k => items.find(i => i.key === k)).filter(Boolean);
+  if (!list.length) list = featuredItems(items);
+  if (!list.length) list = items.slice(0, 8);
+  const urls = list.slice(0, 10).map((it, i) => imgSrc(it.img, i === 0 ? 1024 : 640));
+  const back = document.createElement("div");
+  back.className = "overlay";
+  back.innerHTML = `<div class="box wide"><h2 style="font-size:21px;margin-bottom:12px">Opening preview</h2>
+    <div class="preview16" id="introBox"></div>
+    <div class="headbtns" style="margin-top:14px"><button class="btn btn-ghost" id="introAgain">↻ Play again</button><button class="btn btn-primary" id="introClose">Close</button></div></div>`;
+  document.body.appendChild(back);
+  const box = $("#introBox", back); let ctl = null;
+  const run = () => {
+    if (ctl) ctl.skip();
+    box.innerHTML = ""; box.style.backgroundImage = "";
+    ctl = window.AstrisIntro.play({ host: box, frames: urls, speed, wait: window.AstrisIntro.preload(urls, 800),
+      onArrive: () => { box.style.background = `linear-gradient(rgba(11,10,9,.55), rgba(11,10,9,.8)), center / cover url("${urls[0]}")`; box.dataset.after = "Then your website appears here."; },
+      onDone: () => { box.classList.add("arrived"); } });
+    box.classList.remove("arrived");
+  };
+  $("#introAgain", back).addEventListener("click", run);
+  $("#introClose", back).addEventListener("click", () => { if (ctl) ctl.skip(); back.remove(); });
+  run();
+}
+
+/* ---------------- transitions ---------------- */
+function vTransitions(v) {
+  const T = window.AstrisTransitions;
+  const site = S.site;
+  const st = {
+    mode: String(site.transition_mode || "random"),
+    single: String(site.transition_single || "dissolve"),
+    speed: String(site.transition_speed || "normal"),
+    enabled: (arr(site.transitions_enabled).length ? arr(site.transitions_enabled) : T.defaults).filter(T.has)
+  };
+  const MODES = [["random", "Random: a different one each time"], ["cycle", "In order, one after another"], ["single", "Always the same one"], ["off", "None: pages just appear"]];
+  v.innerHTML = `
+    <div class="pagehead">
+      <div><h1>Transitions</h1><div class="sub">How the site moves from one page to the next. Every one is borrowed from film-making. Switch on the ones you like, try them on the screen below, then save. "Dive in" is the one where clicking a card makes its picture grow to fill the screen.</div></div>
+      <div class="headbtns"><button class="btn btn-primary" id="saveTr">Save</button></div>
+    </div>
+    <div class="panel"><h2>How they are used</h2>
+      <div class="formgrid" id="trForm">
+        ${fieldHTML({ k: "mode", label: "Mode", type: "select", options: MODES, span: 2 }, st.mode)}
+        ${fieldHTML({ k: "single", label: "The one to always use", type: "select", options: T.list.map(t => [t.id, t.name]) }, st.single)}
+        ${fieldHTML({ k: "speed", label: "Speed", type: "select", options: [["fast", "Fast"], ["normal", "Normal"], ["relaxed", "Relaxed"]] }, st.speed)}
+      </div></div>
+    <div class="panel"><h2>Try them</h2>
+      <div class="demo" id="demo"></div>
+      <div class="headbtns" style="margin-top:14px"><button class="btn btn-ghost" id="playSet">▶ Play my set, one after another</button><span class="muted" id="demoName"></span></div></div>
+    <div class="tgrid" id="tgrid"></div>`;
+
+  /* the demo screen: two pages built from your own pictures */
+  const demo = $("#demo", v);
+  const imgs = S.photos.slice(0, 9).map(p => imgSrc(p.image, 640));
+  let side = 0, busy = false;
+  const page = (title, n) => {
+    const d = document.createElement("div");
+    d.className = "demo-layer";
+    d.innerHTML = `<div class="demo-page"><h4>${title}<i>.</i></h4><div class="demo-row">${[0, 1, 2].map(i =>
+      `<div class="demo-img" style="${imgs.length ? `background-image:url('${esc(imgs[(n * 3 + i) % imgs.length])}')` : ""}"></div>`).join("")}</div></div>`;
+    return d;
+  };
+  demo.appendChild(page("FILMS", 0));
+  const run = id => {
+    if (busy) return Promise.resolve();
+    busy = true;
+    const from = demo.lastElementChild, next = 1 - side, to = page(next ? "PHOTOGRAPHY" : "FILMS", next);
+    demo.insertBefore(to, from);
+    const r = $$(".demo-img", from)[1].getBoundingClientRect();
+    $("#demoName", v).textContent = T.list.find(t => t.id === id).name;
+    return T.play(id, { stage: demo, from, to, force: true, speed: st.speed, dir: 1,
+      origin: { x: r.left + r.width / 2, y: r.top + r.height / 2, rect: { left: r.left, top: r.top, width: r.width, height: r.height }, src: imgs.length ? imgs[(side * 3 + 1) % imgs.length] : "" } })
+      .then(() => { from.remove(); side = next; busy = false; });
+  };
+
+  const paint = () => {
+    $("#tgrid", v).innerHTML = T.list.map(t => {
+      const on = st.enabled.indexOf(t.id) > -1;
+      return `<div class="tcard ${on ? "on" : ""}"><div class="thead"><b>${esc(t.name)}</b><span class="toggle ${on ? "on" : ""}" data-t="${t.id}" title="${on ? "In use" : "Not in use"}"></span></div>
+        <p>${esc(t.note)}</p><button type="button" class="btn btn-ghost btn-sm" data-try="${t.id}">▶ Preview</button></div>`;
+    }).join("");
+    $$("[data-t]", v).forEach(b => b.addEventListener("click", () => {
+      const id = b.dataset.t, i = st.enabled.indexOf(id);
+      if (i > -1) { if (st.enabled.length === 1) return toast("Keep at least one switched on.", "err"); st.enabled.splice(i, 1); } else st.enabled.push(id);
+      paint();
+    }));
+    $$("[data-try]", v).forEach(b => b.addEventListener("click", () => run(b.dataset.try)));
+  };
+  paint();
+  bindFields(v);
+  const read = () => readFields($("#trForm", v), [{ k: "mode" }, { k: "single" }, { k: "speed" }], {});
+  $("#trForm", v).addEventListener("change", () => { const x = read(); st.mode = x.mode; st.single = x.single; st.speed = x.speed; });
+  $("#playSet", v).addEventListener("click", async () => {
+    const list = T.list.filter(t => st.enabled.indexOf(t.id) > -1);
+    for (const t of list) { await run(t.id); await new Promise(r => setTimeout(r, 650)); }
+    $("#demoName", v).textContent = "";
+  });
+  $("#saveTr", v).addEventListener("click", async () => {
+    showProgress("Saving transitions");
+    try {
+      const x = read();
+      Object.assign(S.site, { transition_mode: x.mode, transition_single: x.single, transition_speed: x.speed,
+        transitions_enabled: T.list.filter(t => st.enabled.indexOf(t.id) > -1).map(t => t.id) });
+      await commitFiles("Update page transitions via Astris Studio", [{ path: PATHS.site, content: objToYAML(S.site) }]);
+      hideProgress(); toast("Transitions saved ✓ Live in about a minute.", "ok");
+    } catch (e) { hideProgress(); toast("Save failed: " + e.message, "err"); }
+  });
+}
+
+/* ---------------- AI helper (optional): suggests titles and descriptions ---------------- */
+let AI_STATE = null;
+async function aiReady() {
+  if (AI_STATE !== null) return AI_STATE;
+  try { const r = await fetch("/api/describe"); AI_STATE = r.ok ? !!(await r.json()).ready : false; } catch (e) { AI_STATE = false; }
+  return AI_STATE;
+}
+function aiBarHTML(label) {
+  return `<div class="aibar"><button type="button" class="btn btn-ghost btn-sm" id="aiBtn">✨ ${label}</button><span class="muted" id="aiNote"></span></div>`;
+}
+function loadImg(src) {
+  return new Promise((res, rej) => {
+    const im = new Image(); im.crossOrigin = "anonymous";
+    im.onload = () => res(im); im.onerror = () => rej(new Error("Couldn't read that picture"));
+    im.src = src;
+  });
+}
+async function jpegBase64(src, max) {
+  const im = await loadImg(src), k = Math.min(1, (max || 1024) / Math.max(im.naturalWidth, im.naturalHeight));
+  const c = document.createElement("canvas");
+  c.width = Math.max(1, Math.round(im.naturalWidth * k)); c.height = Math.max(1, Math.round(im.naturalHeight * k));
+  c.getContext("2d").drawImage(im, 0, 0, c.width, c.height);
+  return c.toDataURL("image/jpeg", 0.82).split(",")[1];
+}
+async function photoJpeg(path) {
+  try { return await jpegBase64(imgSrc(path, 1024), 1024); }
+  catch (e) { return jpegBase64(rawUrl(path), 1024); }
+}
+async function aiAsk(payload) {
+  const res = await fetch("/api/describe", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + S.token }, body: JSON.stringify(payload) });
+  let j = {}; try { j = await res.json(); } catch (e) { /* ignore */ }
+  if (!res.ok) throw new Error(j.message || ("The AI helper isn't available right now (" + res.status + ")."));
+  return j;
+}
+async function aiRun(btn, fn) {
+  const old = btn ? btn.innerHTML : "";
+  if (btn) { btn.disabled = true; btn.textContent = "Thinking…"; }
+  try { await fn(); return true; }
+  catch (e) { toast(e.message, "err"); return false; }
+  finally { if (btn && document.contains(btn)) { btn.disabled = false; btn.innerHTML = old; } }
+}
+async function aiBatchRowCore(r) {
+  const out = await aiAsk({ kind: "photo", image: await jpegBase64(r.url, 1024), filename: r.file.name, camera: r.camera, lens: r.lens });
+  if (out.title) r.title = out.title;
+  if (out.description) r.description = out.description;
+  if (out.caption && !r.caption) r.caption = out.caption;
+  if (out.tags && out.tags.length && !r.tags.length) r.tags = out.tags;
+}
+function aiBatchRow(r, btn) { return aiRun(btn, () => aiBatchRowCore(r)); }
+async function aiBulkPhotos(list) {
+  if (!list.length) return;
+  if (!(await aiReady())) return toast("The AI helper isn't switched on yet. See the README.", "err");
+  if (!confirm(`Suggest a title and description for ${list.length} photo${list.length > 1 ? "s" : ""}? This replaces their current titles and descriptions. You can read them over before you save.`)) return;
+  showProgress("Suggesting titles and descriptions");
+  let n = 0;
+  try {
+    for (const p of list) {
+      setProgress(n / list.length, `Looking at ${p.title || p.slug}…`);
+      const out = await aiAsk({ kind: "photo", image: await photoJpeg(p.image), filename: p.slug, camera: p.camera, lens: p.lens });
+      if (out.title) p.title = out.title;
+      if (out.description) p.description = out.description;
+      if (out.caption && !p.caption) p.caption = out.caption;
+      if (out.tags && out.tags.length && !p.tags.length) p.tags = out.tags;
+      S.dirty.add(p.slug); n++;
+    }
+    hideProgress(); render(); toast(`Suggestions added to ${n} photos. Read them over, then press Save.`, "ok");
+  } catch (e) { hideProgress(); if (n) render(); toast(`Stopped after ${n}: ${e.message}`, "err"); }
+}
+function bindAI(el, kind, obj) {
+  const btn = $("#aiBtn", el), note = $("#aiNote", el);
+  if (!btn) return;
+  aiReady().then(ok => { if (!ok && note) note.textContent = "Not switched on yet (see the README)."; });
+  btn.addEventListener("click", () => aiRun(btn, async () => {
+    const val = k => { const x = $(`[data-k="${k}"]`, el); return x ? x.value : ""; };
+    const setv = (k, text) => { const x = $(`[data-k="${k}"]`, el); if (x && text) x.value = text; };
+    if (kind === "photo") {
+      const out = await aiAsk({ kind: "photo", image: await photoJpeg(obj.image), filename: obj.slug, camera: obj.camera, lens: obj.lens });
+      setv("title", out.title); setv("description", out.description);
+      if (!val("caption")) setv("caption", out.caption);
+      if (out.tags && out.tags.length && !val("tags")) setv("tags", out.tags.join(", "));
+    } else if (kind === "film") {
+      const w = $('[data-media="thumbnail"]', el);
+      let image = "";
+      if (w && w._file) image = await jpegBase64(URL.createObjectURL(w._file), 1024);
+      else if (obj.thumbnail) image = await photoJpeg(obj.thumbnail);
+      const out = await aiAsk({ kind: "film", image, title: val("title"), type: val("type"), stage: val("stage"), current: val("description") });
+      if (!val("title")) setv("title", out.title);
+      setv("description", out.description);
+    } else {
+      const out = await aiAsk({ kind: "news", title: val("title"), body: val("body") });
+      setv("summary", out.summary);
+    }
+    toast("Suggestion added. Read it over and edit as you like, then save.", "ok");
+  }));
 }
 
 /* ---------------- boot ---------------- */

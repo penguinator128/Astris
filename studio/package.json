@@ -1,0 +1,10 @@
+{
+  "name": "astris-studio",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Astris Studio: the back end for the Astris website. Static pages plus one small serverless function (the AI helper).",
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.8.0"
+  }
+}

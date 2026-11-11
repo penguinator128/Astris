@@ -45,8 +45,10 @@
     var i = 0;
     function unquote(v) {
       v = v.trim();
-      if ((v.charAt(0) === '"' && v.charAt(v.length - 1) === '"') || (v.charAt(0) === "'" && v.charAt(v.length - 1) === "'"))
-        return v.slice(1, -1).replace(/\\"/g, '"');
+      if (v.length > 1 && v.charAt(0) === '"' && v.charAt(v.length - 1) === '"')
+        return v.slice(1, -1).replace(/\\(["\\nrt])/g, function (m, c) { return { '"': '"', "\\": "\\", n: "\n", r: "\r", t: "\t" }[c]; });
+      if (v.length > 1 && v.charAt(0) === "'" && v.charAt(v.length - 1) === "'")
+        return v.slice(1, -1).replace(/''/g, "'");
       if (v === "true") return true;
       if (v === "false") return false;
       if (v !== "" && /^-?\d+(\.\d+)?$/.test(v)) return Number(v);
