@@ -1,1134 +1,745 @@
 /* ============================================================
-   ASTRIS — portfolio app (v3)
-   Content lives in the GitHub repo (committed by Astris Studio)
-   and is rendered client-side with hash routing.
+   ASTRIS: the website.
+   Pages, routing, the opening, and the film-themed page changes.
+   Content comes from the GitHub repo (saved by Astris Studio) through assets/data.js.
+   Routes: #/  #/films  #/film/<slug>  #/photography  #/photo/<slug>  #/news  #/news/<slug>  #/hello
+   (old links #/about #/contact #/downloads still work)
    ============================================================ */
-(() => {
+(function () {
 "use strict";
 
-const REPO = "penguinator128/Astris";
-const BRANCH = "main";
-const RAW = `https://raw.githubusercontent.com/${REPO}/${BRANCH}/`;
-const CACHE_KEY = "astris_content_v3";
-const CACHE_TTL = 5 * 60 * 1000;
+var A = window.AstrisData, D = A.D;
+var esc = A.esc, img = A.img, imgUrl = A.imgUrl, md = A.md, fmtDate = A.fmtDate, setting = A.setting, flag = A.flag, listify = A.listify;
+var TR = window.AstrisTransitions, INTRO = window.AstrisIntro, BRAND = window.ASTRIS_BRAND;
+var $ = function (s, r) { return (r || document).querySelector(s); };
+var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
+var RM = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
+var SAVE = !!(navigator.connection && navigator.connection.saveData);
 
-const NAV = [
+var NAV = [
   { id: "", label: "Home", key: "nav_home" },
   { id: "films", label: "Films", key: "nav_films" },
   { id: "photography", label: "Photography", key: "nav_photography" },
-  { id: "downloads", label: "Downloads", key: "nav_downloads" },
   { id: "news", label: "News", key: "nav_news" },
-  { id: "about", label: "About", key: "nav_about" },
-  { id: "contact", label: "Contact", key: "nav_contact" }
+  { id: "hello", label: "Say hello", key: "nav_hello" }
 ];
+var YT = "https://www.youtube.com/@AstrisProductions128";
+var EMAIL = "astris.a.productions@gmail.com";
+var SPEED = { fast: 0.72, normal: 1, relaxed: 1.45 };
 
-const D = {
-  photos: [], films: [], news: [], series: [],
-  site: {}, about: {}, contact: {},
-  ready: false, error: null
-};
-
-/* ---------------- utilities ---------------- */
-const $ = (s, r) => (r || document).querySelector(s);
-const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
-const esc = s => String(s == null ? "" : s)
-  .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-  .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-const attr = esc;
-const truthy = v => v === true || v === "true";
-const enabled = (v) => v !== false && v !== "false";
-
-function fmtDate(d, opts) {
-  if (!d) return "";
-  const dt = d instanceof Date ? d : new Date(d);
-  if (isNaN(dt)) return "";
-  return dt.toLocaleDateString("en-AU", opts || { day: "numeric", month: "long", year: "numeric" });
+/* ---------- small helpers ---------- */
+function unique(a) { return a.filter(function (v, i) { return v && a.indexOf(v) === i; }); }
+function pad(n) { return (n < 10 ? "0" : "") + n; }
+function upper(s) { return esc(String(s || "").toUpperCase()); }
+function dot(s) { return upper(s) + "<i>.</i>"; }
+function dateOf(d) { return d ? fmtDate(d, { day: "numeric", month: "short", year: "numeric" }) : ""; }
+function socials() {
+  var list = (Array.isArray(D.contact.socials) ? D.contact.socials : []).concat(Array.isArray(D.about.links) ? D.about.links : [])
+    .filter(function (s) { return s && s.url; }).map(function (s) { return { label: s.label || "Link", url: s.url }; });
+  if (!list.some(function (s) { return /youtube/i.test(s.label + s.url); })) list.unshift({ label: "YouTube", url: YT });
+  return list;
 }
+function handleOf(url) { var m = String(url).match(/@[A-Za-z0-9_.-]+/); return m ? m[0] : ""; }
+function email() { return D.contact.email || EMAIL; }
 
-/* ---------------- YAML front-matter parser ---------------- */
-function parseYAML(src) {
-  const out = {};
-  const lines = src.replace(/\r/g, "").split("\n");
-  let i = 0;
-  const unquote = v => {
-    v = v.trim();
-    if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'")))
-      return v.slice(1, -1).replace(/\\"/g, '"');
-    if (v === "true") return true;
-    if (v === "false") return false;
-    if (v !== "" && /^-?\d+(\.\d+)?$/.test(v)) return Number(v);
-    return v;
-  };
-  while (i < lines.length) {
-    const line = lines[i];
-    if (!line.trim() || line.trim().startsWith("#")) { i++; continue; }
-    const m = line.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
-    if (!m) { i++; continue; }
-    const key = m[1];
-    let val = m[2];
-
-    if (val === "" || val == null) {
-      const items = [];
-      let j = i + 1;
-      while (j < lines.length) {
-        const l = lines[j];
-        if (!l.trim()) { j++; continue; }
-        const im = l.match(/^\s+-\s*(.*)$/);
-        if (!im) break;
-        const rest = im[1];
-        const om = rest.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
-        if (om) {
-          const obj = {}; obj[om[1]] = unquote(om[2]);
-          const baseIndent = l.match(/^\s*/)[0].length;
-          j++;
-          while (j < lines.length) {
-            const l2 = lines[j];
-            if (!l2.trim()) { j++; continue; }
-            const ind = l2.match(/^\s*/)[0].length;
-            const km = l2.match(/^\s+([A-Za-z0-9_-]+):\s*(.*)$/);
-            if (!km || ind <= baseIndent || /^\s+-/.test(l2)) break;
-            obj[km[1]] = unquote(km[2]);
-            j++;
-          }
-          items.push(obj);
-        } else {
-          items.push(unquote(rest));
-          j++;
-        }
-      }
-      if (items.length) { out[key] = items; i = j; continue; }
-      out[key] = "";
-      i++;
-      continue;
-    }
-
-    if (/^[>|]/.test(val)) {
-      const buf = [];
-      let j = i + 1;
-      while (j < lines.length) {
-        const l = lines[j];
-        if (l.trim() && !/^\s/.test(l)) break;
-        buf.push(l.replace(/^\s{2}/, ""));
-        j++;
-      }
-      out[key] = buf.join(val.startsWith("|") ? "\n" : " ").trim();
-      i = j;
-      continue;
-    }
-
-    if (val.startsWith("[") && val.endsWith("]")) {
-      out[key] = val.slice(1, -1).split(",").map(s => unquote(s)).filter(s => s !== "");
-      i++;
-      continue;
-    }
-
-    out[key] = unquote(val);
-    i++;
+/* ---------- the items that feed the intro, the reel and the slideshow ---------- */
+function allItems() {
+  var l = [];
+  D.films.forEach(function (f) { if (f.thumb) l.push({ key: "film/" + f.slug, kind: "Film", title: f.title, href: "#/film/" + f.slug, img: f.thumb, date: f.date, featured: f.featured, order: f.featuredOrder }); });
+  D.photos.forEach(function (p) { l.push({ key: "photo/" + p.slug, kind: "Photo", title: p.title || p.caption || "Photo", href: "#/photo/" + p.slug, img: p.image, date: p.date, featured: p.featured, order: p.featuredOrder }); });
+  return l;
+}
+function featured() {
+  return allItems().filter(function (x) { return x.featured; }).sort(function (a, b) { return (a.order - b.order) || ((b.date || 0) - (a.date || 0)); });
+}
+function latest(n) { return allItems().sort(function (a, b) { return (b.date || 0) - (a.date || 0); }).slice(0, n); }
+function pickItems(key, n) {
+  var keys = listify(D.site[key]);
+  if (keys.length) {
+    var map = {}; allItems().forEach(function (x) { map[x.key] = x; });
+    var chosen = keys.map(function (k) { return map[k]; }).filter(Boolean);
+    if (chosen.length) return chosen;
   }
-  return out;
+  var f = featured();
+  return f.length ? f : latest(n || 12);
 }
 
-function parseFrontMatter(text) {
-  const m = text.match(/^---\s*\n([\s\S]*?)\n---\s*\n?([\s\S]*)$/);
-  if (!m) return { data: parseYAML(text), body: "" };
-  const data = parseYAML(m[1]);
-  data.body = (m[2] || "").trim();
-  return { data, body: data.body };
+/* ============================================================
+   THE FOOTER (on every page), with the film reel rolling at the very bottom
+   ============================================================ */
+function footerHtml() {
+  var brand = esc(setting("brand", "ASTRIS"));
+  var base = esc(setting("footer_text", "© " + new Date().getFullYear() + " Astris Productions"));
+  var who = esc(setting("footer_name", "Josh"));
+  var note = setting("footer_note", "");
+  var soc = socials().map(function (s) {
+    var h = handleOf(s.url);
+    return '<a href="' + esc(s.url) + '" target="_blank" rel="noopener">' + esc(s.label) + (h ? "<small>" + esc(h) + "</small>" : "") + "</a>";
+  }).join("");
+  var items = pickItems("reel_items", 14), half = items.slice();
+  while (half.length && half.length < 14) half = half.concat(items);
+  var frames = half.map(function (it) {
+    return '<a class="fr" href="' + esc(it.href) + '" tabindex="-1" draggable="false">' + img(it.img, 480, it.title, "fri") + "<span>" + esc(it.title) + "</span></a>";
+  }).join("");
+  var mult = { slow: 1.5, normal: 1, fast: 0.65 }[setting("reel_speed", "normal")] || 1;
+  var dur = Math.round(Math.max(50, half.length * 6) * mult);
+  return '<footer class="foot"><div class="foot-in">' +
+    '<div class="fbrand"><svg class="logo" viewBox="0 0 1900 1600" role="img" aria-label="' + brand + '"><path fill="currentColor" fill-rule="evenodd" d="' + BRAND.logo + '"/></svg>' +
+    '<div><b class="a">ASTRIS<br>PRODUCTIONS</b><p>' + esc(setting("tagline", "Photography & Film")) + "</p></div></div>" +
+    '<nav class="fcol" aria-label="Footer"><h4>Explore</h4>' + NAV.map(function (n) { return '<a href="#/' + n.id + '">' + esc(setting(n.key, n.label)) + "</a>"; }).join("") + "</nav>" +
+    '<div class="fcol"><h4>Follow</h4>' + soc + "</div>" +
+    '<div class="fcol"><h4>Contact</h4><a href="mailto:' + esc(email()) + '">' + esc(email()) + "</a>" + (D.contact.location ? "<p>" + esc(D.contact.location) + "</p>" : "") + "</div></div>" +
+    '<div class="fbase"><span>' + base + "</span><span>" + who + (note ? " &middot; " + esc(note) : "") + '</span><button type="button" data-replay>Replay intro</button></div>' +
+    (frames ? '<div class="ribbon" aria-hidden="true"><div class="track" style="--dur:' + dur + 's">' + frames + frames + "</div></div>" : "") +
+    "</footer>";
 }
 
-/* ---------------- markdown ---------------- */
-function md(src) {
-  if (!src) return "";
-  const blocks = String(src).replace(/\r/g, "").split(/\n{2,}/);
-  const inline = s => esc(s)
-    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" loading="lazy">')
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
-    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-    .replace(/\*([^*]+)\*/g, "<em>$1</em>")
-    .replace(/`([^`]+)`/g, "<code>$1</code>");
-  return blocks.map(b => {
-    const t = b.trim();
-    if (!t) return "";
-    if (/^###\s/.test(t)) return `<h4>${inline(t.replace(/^###\s+/, ""))}</h4>`;
-    if (/^##\s/.test(t)) return `<h3>${inline(t.replace(/^##\s+/, ""))}</h3>`;
-    if (/^#\s/.test(t)) return `<h2>${inline(t.replace(/^#\s+/, ""))}</h2>`;
-    if (/^>\s?/.test(t)) return `<blockquote>${inline(t.replace(/^>\s?/gm, ""))}</blockquote>`;
-    if (/^[-*]\s/.test(t)) return `<ul>${t.split(/\n/).map(l => `<li>${inline(l.replace(/^[-*]\s+/, ""))}</li>`).join("")}</ul>`;
-    if (/^\d+\.\s/.test(t)) return `<ol>${t.split(/\n/).map(l => `<li>${inline(l.replace(/^\d+\.\s+/, ""))}</li>`).join("")}</ol>`;
-    return `<p>${inline(t).replace(/\n/g, "<br>")}</p>`;
-  }).join("\n");
+/* ============================================================
+   PAGES. Each returns { key, nav, title, dark, html, bind(root) }
+   ============================================================ */
+function pageHead(title, intro) {
+  return '<header class="ph"><h1 class="a">' + dot(title) + "</h1>" + (intro ? "<p>" + esc(intro) + "</p>" : "") + "</header>";
 }
-
-/* ---------------- content loading ---------------- */
-async function loadContent() {
-  const cached = readCache();
-  if (cached) { applyContent(cached); return; }
-  try {
-    const treeRes = await fetch(`https://api.github.com/repos/${REPO}/git/trees/${BRANCH}?recursive=1`);
-    if (!treeRes.ok) throw new Error("GitHub tree request failed: " + treeRes.status);
-    const tree = (await treeRes.json()).tree || [];
-    const wanted = tree.filter(n =>
-      n.type === "blob" &&
-      /^content\/(photos|videos|news|series|settings)\/.+\.(md|yml|yaml)$/i.test(n.path));
-    const files = await Promise.all(wanted.map(async n => {
-      const txt = await fetch(RAW + n.path).then(r => r.ok ? r.text() : "");
-      return { path: n.path, text: txt };
-    }));
-    const raw = { photos: [], videos: [], news: [], series: [], settings: {} };
-    for (const f of files) {
-      if (!f.text) continue;
-      const folder = f.path.split("/")[1];
-      const name = f.path.split("/").pop().replace(/\.(md|yml|yaml)$/i, "");
-      const { data } = parseFrontMatter(f.text);
-      data._slug = name;
-      if (folder === "settings") raw.settings[name] = data;
-      else if (raw[folder]) raw[folder].push(data);
-    }
-    writeCache(raw);
-    applyContent(raw);
-  } catch (e) {
-    console.error("Content load failed", e);
-    const stale = readCache(true);
-    if (stale) applyContent(stale);
-    else { D.error = e; D.ready = true; render(); }
-  }
+function empty(msg, link) {
+  return '<div class="empty rv"><p>' + esc(msg) + "</p>" + (link || "") + "</div>";
 }
-
-function readCache(ignoreTTL) {
-  try {
-    const c = JSON.parse(sessionStorage.getItem(CACHE_KEY));
-    if (c && c.data && (ignoreTTL || Date.now() - c.t < CACHE_TTL)) return c.data;
-  } catch (e) { /* ignore */ }
-  return null;
+function select(id, label, opts, cur) {
+  return '<label class="sel"><span class="sr">' + esc(label) + '</span><select id="' + id + '">' + opts.map(function (o) {
+    return '<option value="' + esc(o[0]) + '"' + (o[0] === cur ? " selected" : "") + ">" + esc(o[1]) + "</option>";
+  }).join("") + "</select></label>";
 }
-function writeCache(data) {
-  try { sessionStorage.setItem(CACHE_KEY, JSON.stringify({ t: Date.now(), data })); } catch (e) { /* ignore */ }
+function tabs(group, list, cur) {
+  return '<div class="tabs" data-g="' + group + '" role="group">' + list.map(function (t) {
+    return '<button type="button" class="tab" data-v="' + esc(t[0]) + '" aria-pressed="' + (t[0] === cur) + '">' + esc(t[1]) + "</button>";
+  }).join("") + "</div>";
 }
-
-function listify(v) {
-  if (Array.isArray(v)) return v.filter(Boolean).map(String);
-  if (v == null || v === "") return [];
-  return [String(v)];
-}
-
-function applyContent(raw) {
-  D.site = raw.settings.site || {};
-  D.about = raw.settings.about || {};
-  D.contact = raw.settings.contact || {};
-
-  D.series = (raw.series || [])
-    .map(s => ({ title: s.title || s._slug, order: Number(s.order) || 999, description: s.description || "" }))
-    .sort((a, b) => a.order - b.order || a.title.localeCompare(b.title));
-
-  D.photos = (raw.photos || []).map(p => {
-    const date = p.date ? new Date(p.date) : null;
-    return {
-      slug: p._slug,
-      title: p.title || "",
-      image: p.image || "",
-      caption: p.caption || "",
-      description: p.description || "",
-      story: p.story || "",
-      series: listify(p.series).length ? listify(p.series) : listify(p.project),
-      tags: listify(p.tags),
-      date: date && !isNaN(date) ? date : null,
-      camera: p.camera || "",
-      lens: p.lens || "",
-      iso: p.iso === 0 ? "" : String(p.iso || ""),
-      aperture: p.aperture || "",
-      shutter: p.shutter_speed || "",
-      focal: p.focal_length || "",
-      featured: truthy(p.featured),
-      featuredOrder: Number(p.featured_order) || 999,
-      download: truthy(p.download) || truthy(p.downloadable)
-    };
-  }).filter(p => p.image).sort((a, b) => (b.date || 0) - (a.date || 0));
-
-  D.films = (raw.videos || []).map(v => {
-    const url = String(v.video_url || "");
-    const yt = url.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/)([A-Za-z0-9_-]{6,})/);
-    const vm = url.match(/vimeo\.com\/(\d+)/);
-    const date = v.date ? new Date(v.date) : null;
-    const validDate = date && !isNaN(date) ? date : null;
-    return {
-      slug: v._slug,
-      title: v.title || "",
-      file: v.video || "",
-      url,
-      yt: yt ? yt[1] : null,
-      vimeo: vm ? vm[1] : null,
-      thumb: v.thumbnail || (yt ? `https://i.ytimg.com/vi/${yt[1]}/hqdefault.jpg` : ""),
-      length: v.length || "",
-      type: v.type || "",
-      year: v.year ? String(v.year) : (validDate ? String(validDate.getFullYear()) : ""),
-      date: validDate,
-      description: v.description || v.body || "",
-      featured: truthy(v.featured),
-      featuredOrder: Number(v.featured_order) || 999
-    };
-  }).sort((a, b) => (b.date || 0) - (a.date || 0));
-
-  D.news = (raw.news || []).map(n => ({
-    slug: n._slug,
-    title: n.title || "",
-    date: n.date ? new Date(n.date) : null,
-    summary: n.summary || (n.body || "").replace(/[#>*_]/g, "").slice(0, 150),
-    image: n.image || "",
-    body: n.body || ""
-  })).sort((a, b) => (b.date || 0) - (a.date || 0));
-
-  D.ready = true;
-  D.error = null;
-  buildShell();
-  render();
-}
-
-/* ---------------- routing ---------------- */
-function parseHash() {
-  const h = location.hash.replace(/^#\/?/, "");
-  const [pathPart, queryPart] = h.split("?");
-  const segs = pathPart.split("/").filter(Boolean);
-  const params = new URLSearchParams(queryPart || "");
-  return { page: segs[0] || "", arg: segs.slice(1).join("/"), params };
-}
-function go(hash) { location.hash = hash; }
-
-let filmModalEl = null;
-let heroCleanup = null;
-
-function render() {
-  closeFilmModal();
-  if (heroCleanup) { heroCleanup(); heroCleanup = null; }
-  const app = $("#app");
-  const route = parseHash();
-  setNavActive(route.page);
-  window.scrollTo({ top: 0 });
-
-  if (!D.ready) { app.innerHTML = loaderHTML(); return; }
-  if (D.error && !D.photos.length) {
-    app.innerHTML = `<div class="loader"><span>Couldn't load content — please refresh.</span></div>`;
-    return;
-  }
-
-  switch (route.page) {
-    case "": renderHome(app); break;
-    case "films": renderFilms(app); break;
-    case "photography": renderPhotography(app, route.params); break;
-    case "downloads": renderDownloads(app); break;
-    case "news": route.arg ? renderArticle(app, route.arg) : renderNews(app); break;
-    case "photo": renderPhotoPage(app, route.arg); break;
-    case "about": renderAbout(app); break;
-    case "contact": renderContact(app); break;
-    default: renderHome(app);
-  }
-  bindImages(app);
-  bindReveal(app);
-}
-
-function setNavActive(page) {
-  $$(".site-nav a, .mobile-menu a").forEach(a => {
-    a.classList.toggle("active", (a.dataset.page || "") === page);
+function bindTabs(root, state, fn) {
+  $$(".tabs", root).forEach(function (g) {
+    $$(".tab", g).forEach(function (b) {
+      b.onclick = function () {
+        state[g.dataset.g] = b.dataset.v;
+        $$(".tab", g).forEach(function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
+        fn();
+      };
+    });
   });
 }
-
-function loaderHTML() {
-  return `<div class="loader">
-    <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="12" cy="12" r="9"></circle><path d="M12 3v4M12 17v4M3 12h4M17 12h4"></path></svg>
-    <span>Astris</span></div>`;
+function notFound(what) {
+  return { key: "404", nav: "", title: "Not found", dark: true, html: '<div class="pg"><div class="pg-in">' + pageHead("Not found", "That " + what + " isn't here (any more).") + '<p><a class="btn y" href="#/">Back home</a></p></div></div>' };
 }
+function wrap(inner) { return '<div class="pg"><div class="pg-in">' + inner + "</div></div>"; }
 
-/* ---------------- shared partials ---------------- */
-function photoCard(p, opts = {}) {
-  const meta = [p.series[0], fmtDate(p.date, { month: "short", year: "numeric" })].filter(Boolean).join(" · ");
-  return `<a class="ph-card" href="#/photo/${attr(p.slug)}" ${opts.masonry ? "" : 'style="--ratio:4/5"'}>
-    <img data-lazy src="${attr(p.image)}" alt="${attr(p.title || p.caption)}" loading="lazy" decoding="async">
-    <div class="ph-overlay">
-      <span class="ph-title">${esc(p.title || p.caption)}</span>
-      <span class="ph-meta">${esc(meta)}</span>
-    </div>
-    ${p.download ? `<span class="dl-badge" title="Free download available">${iconDownload(14)}</span>` : ""}
-  </a>`;
+/* ---- cards ---- */
+function progressBar(f) {
+  var stages = A.STAGES;
+  return '<div class="prog" role="img" aria-label="' + esc(f.stage + ", " + f.progress + " percent") + '"><i style="width:' + f.progress + '%"></i></div>' +
+    '<p class="stage"><b>' + esc(f.stage) + "</b> &middot; " + f.progress + "%" + (f.update ? " &middot; " + esc(f.update) : "") + "</p>";
 }
-
 function filmCard(f) {
-  return `<div class="film-card" data-film="${attr(f.slug)}">
-    <div class="film-thumb">
-      ${f.thumb
-        ? `<img data-lazy src="${attr(f.thumb)}" alt="${attr(f.title)}" loading="lazy" decoding="async">`
-        : `<div class="film-thumb-blank"></div>`}
-      ${f.type ? `<span class="film-badge">${esc(f.type)}</span>` : ""}
-      <span class="play"><span>${iconPlay(20)}</span></span>
-    </div>
-    <div class="film-row">
-      <span class="film-title">${esc(f.title)}</span>
-      ${f.year ? `<span class="film-year">${esc(f.year)}</span>` : ""}
-    </div>
-    ${f.length || f.description ? `<span class="film-meta">${esc(f.length || f.description.slice(0, 80))}</span>` : ""}
-  </div>`;
+  var meta = [f.type, f.year, f.length].filter(Boolean).join(" · ");
+  return '<a class="card rv" data-dive href="#/film/' + esc(f.slug) + '"><div class="im">' +
+    (f.thumb ? img(f.thumb, 960, f.title, "ci") : '<span class="noim"></span>') +
+    (f.wip ? '<span class="tag">In progress</span>' : "") + "</div><h3 class=\"a\">" + esc(f.title) + "</h3>" +
+    (f.wip ? progressBar(f) : (meta ? '<p class="meta">' + esc(meta) + "</p>" : "")) + "</a>";
+}
+function photoTile(p, w) {
+  return '<a class="tile rv" data-dive href="#/photo/' + esc(p.slug) + '" aria-label="' + esc(p.title || "Photo") + '">' + img(p.image, w || 640, p.title, "ci") + "</a>";
+}
+function newsRow(n) {
+  return '<a class="post rv" href="#/news/' + esc(n.slug) + '"><time>' + esc(dateOf(n.date)) + '</time><h3 class="a">' + esc(n.title) + '</h3><span class="tg">' + esc(n.tags.join(" · ")) + "</span></a>";
+}
+function section(prefix, title, linkLabel, href, body, lead) {
+  var heading = setting(prefix + "_heading", title);
+  return '<section class="blk"><div class="blk-in"><div class="blk-h rv"><h2 class="a">' + dot(heading) + "</h2>" +
+    (href ? '<a class="link" href="' + href + '">' + esc(setting(prefix + "_link", linkLabel)) + " &rarr;</a>" : "") + "</div>" +
+    (lead ? '<p class="lead rv">' + esc(lead) + "</p>" : "") + body + "</div></section>";
 }
 
-function newsCard(n) {
-  return `<a class="news-card" href="#/news/${attr(n.slug)}">
-    ${n.image ? `<div class="news-thumb"><img data-lazy src="${attr(n.image)}" alt="" loading="lazy" decoding="async"></div>` : ""}
-    <span class="news-date">${esc(fmtDate(n.date))}</span>
-    <span class="news-title">${esc(n.title)}</span>
-    <p class="news-summary">${esc(n.summary)}</p>
-    <span class="btn-link">Read more ${iconArrow(14)}</span>
-  </a>`;
+/* ---- home ---- */
+function pHome() {
+  var hero = '<section class="hero"><div class="hero-in"><h1 class="a">' + upper(setting("hero_title", "Astris")) + '</h1><p class="prod">' + upper(setting("hero_subtitle", "Productions")) + "</p>" +
+    '<p class="go"><a class="btn y" href="' + esc(setting("home_cta_link", "#/films")) + '">' + esc(setting("home_cta_label", "Watch the films")) + ' <span aria-hidden="true">&rarr;</span></a></p></div>' +
+    '<div class="scue" aria-hidden="true">Scroll</div></section>';
+  var secs = [];
+  function add(key, def, order, html) { if (html && flag("home_" + key + "_enabled", def)) secs.push({ order: Number(setting("home_" + key + "_order", order)), html: html }); }
+  add("films", true, 1, D.films.length ? section("home_latest_films", "Latest films", "All films", "#/films", '<div class="grid g3">' + D.films.slice(0, 3).map(filmCard).join("") + "</div>") : "");
+  add("photos", true, 2, D.photos.length ? section("home_latest_photos", "Latest photos", "All photos", "#/photography", '<div class="grid g4 sq">' + D.photos.slice(0, 8).map(function (p) { return photoTile(p, 640); }).join("") + "</div>") : "");
+  var feat = featured().slice(0, 6);
+  add("selected", false, 3, feat.length ? section("home_selected", "Selected work", "", "", '<div class="grid g3">' + feat.map(function (x) {
+    return '<a class="card rv" data-dive href="' + esc(x.href) + '"><div class="im">' + img(x.img, 960, x.title, "ci") + '<span class="tag alt">' + esc(x.kind) + "</span></div><h3 class=\"a\">" + esc(x.title) + "</h3></a>";
+  }).join("") + "</div>", setting("home_selected_intro", "")) : "");
+  var caps = listify(D.about.capabilities);
+  add("about", true, 4, '<section class="blk"><div class="blk-in bio"><div class="me rv"><img class="me-img" src="' + esc(D.about.image ? imgUrl(D.about.image, 960) : "/images/silhouette.jpg") + '" alt="Silhouette of a person holding a camera" loading="lazy"></div><div class="rv"><h2 class="a">' + dot(D.about.home_heading || "Hi, I'm Josh") + "</h2><p>" +
+    esc(D.about.home_text || D.about.intro || "Photographer and filmmaker.") + "</p>" + (caps.length ? '<p class="caps">' + caps.map(esc).join(" &middot; ") + "</p>" : "") +
+    '<p><a class="btn y" href="#/hello">Say hello <span aria-hidden="true">&rarr;</span></a></p></div></div></section>');
+  add("news", true, 5, D.news.length ? section("home_news", "News", "All news", "#/news", D.news.slice(0, 3).map(newsRow).join("")) : "");
+  secs.sort(function (a, b) { return a.order - b.order; });
+  return { key: "home", nav: "", title: "", dark: false, html: hero + secs.map(function (s) { return s.html; }).join("") };
 }
 
-const iconArrow = s => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>`;
-const iconPlay = s => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"></path></svg>`;
-const iconDownload = s => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 4v11M6 11l6 6 6-6M5 20h14"></path></svg>`;
-const iconChevL = s => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M15 18l-6-6 6-6"></path></svg>`;
-const iconChevR = s => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 6l6 6-6 6"></path></svg>`;
-
-/* ---------------- HOME ---------------- */
-function renderHome(app) {
-  const s = D.site;
-  const slides = buildHeroSlides();
-
-  const sections = [
-    {
-      key: "photos",
-      order: Number(s.home_photos_order) || 1,
-      on: enabled(s.home_photos_enabled),
-      html: () => {
-        const latest = D.photos.slice(0, 4);
-        if (!latest.length) return "";
-        return sectionHTML({
-          kicker: s.home_latest_photos_kicker || "Stills",
-          heading: s.home_latest_photos_heading || "Latest photos",
-          link: { href: "#/photography", label: s.home_latest_photos_link || "View gallery" },
-          body: `<div class="grid-photos grid-anim">${latest.map(p => photoCard(p)).join("")}</div>`
-        });
+/* ---- films ---- */
+var fs = { show: "all", type: "", sort: "new" };
+function pFilms() {
+  var types = unique(D.films.map(function (f) { return f.type; }));
+  var html = pageHead(setting("films_heading", "Films"), setting("films_intro", "Finished films and the ones still being made, all in one place.")) +
+    (D.films.length ? '<div class="bar rv">' + tabs("show", [["all", "All"], ["done", "Finished"], ["wip", "In progress"]], fs.show) +
+      '<div class="bar-r">' + (types.length > 1 ? select("ftype", "Type", [["", "All types"]].concat(types.map(function (t) { return [t, t]; })), fs.type) : "") +
+      select("fsort", "Sort", [["new", "Newest first"], ["old", "Oldest first"], ["az", "A to Z"]], fs.sort) + '<span class="count" id="fcount"></span></div></div><div class="grid g3" id="fout"></div>'
+      : empty("No films here yet. The first ones are on their way.", '<p><a class="btn o" href="' + YT + '" target="_blank" rel="noopener">Follow on YouTube</a></p>'));
+  return {
+    key: "films", nav: "films", title: setting("films_heading", "Films"), dark: true, html: wrap(html),
+    bind: function (root) {
+      if (!D.films.length) return;
+      function draw() {
+        var l = D.films.filter(function (f) { return (fs.show === "all" || (fs.show === "wip" ? f.wip : !f.wip)) && (!fs.type || f.type === fs.type); });
+        l.sort(function (a, b) { return fs.sort === "az" ? a.title.localeCompare(b.title) : fs.sort === "old" ? (a.date || 0) - (b.date || 0) : (b.date || 0) - (a.date || 0); });
+        $("#fcount", root).textContent = l.length + (l.length === 1 ? " film" : " films");
+        $("#fout", root).innerHTML = l.length ? l.map(filmCard).join("") : empty("Nothing here yet. Try another filter.");
+        reveal($("#fout", root));
       }
-    },
-    {
-      key: "films",
-      order: Number(s.home_films_order) || 2,
-      on: enabled(s.home_films_enabled),
-      html: () => {
-        const films = D.films.slice(0, 3);
-        if (!films.length) return "";
-        return sectionHTML({
-          kicker: s.home_latest_films_kicker || "Motion",
-          heading: s.home_latest_films_heading || "Latest films",
-          link: { href: "#/films", label: s.home_latest_films_link || "All films" },
-          body: `<div class="grid-films grid-anim">${films.map(f => filmCard(f)).join("")}</div>`
-        });
-      }
-    },
-    {
-      key: "selected",
-      order: Number(s.home_selected_order) || 3,
-      on: enabled(s.home_selected_enabled),
-      html: () => {
-        const selected = D.photos.filter(p => p.featured)
-          .sort((a, b) => a.featuredOrder - b.featuredOrder).slice(0, 6);
-        if (!selected.length) return "";
-        return sectionHTML({
-          kicker: s.home_selected_kicker || "Curated",
-          heading: s.home_selected_heading || "Selected work",
-          intro: s.home_selected_intro,
-          body: `<div class="masonry grid-anim">${selected.map(p => photoCard(p, { masonry: true })).join("")}</div>`
-        });
-      }
-    },
-    {
-      key: "about",
-      order: Number(s.home_about_order) || 4,
-      on: enabled(s.home_about_enabled),
-      html: () => {
-        const a = D.about;
-        return `<section class="about-band" data-reveal>
-          <div style="max-width:52ch">
-            <span class="kicker">${esc(a.kicker || "About")}</span>
-            <h2 style="margin:10px 0 8px">${esc(a.home_heading || a.heading || "About Astris")}</h2>
-            <p class="dim">${esc(a.home_text || a.intro || "")}</p>
-          </div>
-          <a class="btn btn-primary" href="#/about">Read more</a>
-        </section>`;
-      }
-    },
-    {
-      key: "news",
-      order: Number(s.home_news_order) || 5,
-      on: enabled(s.home_news_enabled),
-      html: () => {
-        const news = D.news.slice(0, 3);
-        if (!news.length) return "";
-        return sectionHTML({
-          kicker: s.home_news_kicker || "Journal",
-          heading: s.home_news_heading || "Latest news",
-          link: { href: "#/news", label: s.home_news_link || "All news" },
-          body: `<div class="grid-news grid-anim">${news.map(n => newsCard(n)).join("")}</div>`
-        });
-      }
+      var st = $("#ftype", root), ss = $("#fsort", root);
+      if (st) st.onchange = function () { fs.type = this.value; draw(); };
+      ss.onchange = function () { fs.sort = this.value; draw(); };
+      bindTabs(root, fs, draw);
+      draw();
     }
-  ];
-
-  const body = sections.filter(x => x.on).sort((a, b) => a.order - b.order)
-    .map(x => x.html()).join("");
-
-  app.innerHTML = `<div class="page">${heroHTML(slides)}${body}</div>`;
-  initHero(app, slides);
-  bindFilmCards(app);
-}
-
-function sectionHTML({ kicker, heading, intro, link, body }) {
-  return `<section class="section" data-reveal>
-    <div class="section-head">
-      <div>
-        ${kicker ? `<span class="kicker">${esc(kicker)}</span>` : ""}
-        <h2>${esc(heading)}</h2>
-        ${intro ? `<p class="sub">${esc(intro)}</p>` : ""}
-      </div>
-      ${link ? `<a class="btn-link" href="${attr(link.href)}">${esc(link.label)} ${iconArrow(15)}</a>` : ""}
-    </div>
-    ${body}
-  </section>`;
-}
-
-/* ---------------- HERO ---------------- */
-function buildHeroSlides() {
-  const s = D.site;
-  const mode = String(s.hero_background || "photos").toLowerCase();
-  const wantPhotos = mode !== "videos" && mode !== "video";
-  const wantVideos = mode === "videos" || mode === "video" || mode === "both";
-  const slides = [];
-
-  if (s.hero_video) {
-    slides.push({
-      kind: "video", src: s.hero_video, poster: "",
-      title: s.hero_showreel_title || "Showreel",
-      href: "#/films", film: null
-    });
-  }
-  if (wantPhotos) {
-    D.photos.filter(p => p.featured)
-      .sort((a, b) => a.featuredOrder - b.featuredOrder)
-      .slice(0, 5)
-      .forEach(p => slides.push({
-        kind: "photo", src: p.image,
-        title: p.title || p.caption, href: "#/photo/" + p.slug
-      }));
-  }
-  if (wantVideos) {
-    D.films.filter(f => f.featured)
-      .sort((a, b) => a.featuredOrder - b.featuredOrder)
-      .slice(0, 5)
-      .forEach(f => slides.push({
-        kind: f.file ? "video" : "photo",
-        src: f.file || f.thumb,
-        poster: f.thumb,
-        title: f.title, href: "#/films", film: f
-      }));
-  }
-  return slides.filter(x => x.src).slice(0, 8);
-}
-
-function heroHTML(slides) {
-  const s = D.site;
-  const title = s.hero_title || s.brand || "Astris";
-  const sub = s.hero_subtitle || "";
-  const many = slides.length > 1;
-
-  const slideMedia = sl => sl.kind === "video"
-    ? `<video class="hero-video" src="${attr(sl.src)}" ${sl.poster ? `poster="${attr(sl.poster)}"` : ""} muted loop playsinline preload="metadata"></video>`
-    : `<img src="${attr(sl.src)}" alt="" draggable="false">`;
-  const slideHTML = sl => `<div class="hero-slide">${slideMedia(sl)}</div>`;
-
-  const track = !slides.length
-    ? `<div class="hero-slide hero-slide-empty"></div>`
-    : many
-      ? [slides[slides.length - 1], ...slides, slides[0]].map(slideHTML).join("")
-      : slideHTML(slides[0]);
-
-  return `<section class="hero ${slides.length ? "" : "hero-bare"}" id="hero">
-    <div class="hero-track no-anim" id="heroTrack">${track}</div>
-    <div class="hero-veil"></div>
-
-    <div class="hero-center">
-      <h1 class="hero-wordmark">${esc(title)}</h1>
-      ${sub ? `<p class="hero-sub">${esc(sub)}</p>` : ""}
-    </div>
-
-    ${slides.length ? `<div class="hero-card" id="heroCard">
-      <div class="hero-card-text">
-        <span class="hero-card-label">Featured project</span>
-        <span class="hero-card-title" id="heroCardTitle"></span>
-      </div>
-      <a class="btn btn-primary hero-card-cta" id="heroCardCta" href="#">${esc(s.hero_cta_label || "View Project")}</a>
-    </div>` : ""}
-
-    ${many ? `
-      <button class="hero-arrow prev" id="heroPrev" aria-label="Previous slide">${iconChevL(20)}</button>
-      <button class="hero-arrow next" id="heroNext" aria-label="Next slide">${iconChevR(20)}</button>
-      <div class="hero-dots" id="heroDots">${slides.map((_, i) =>
-        `<button class="hero-dot" data-i="${i}" aria-label="Go to slide ${i + 1}"></button>`).join("")}</div>` : ""}
-  </section>`;
-}
-
-function initHero(root, slides) {
-  const hero = $("#hero", root);
-  if (!hero || !slides.length) return;
-  const track = $("#heroTrack", hero);
-  const card = $("#heroCard", hero);
-  const cardTitle = $("#heroCardTitle", hero);
-  const cardCta = $("#heroCardCta", hero);
-  const n = slides.length;
-  const s = D.site;
-  const dest = String(s.hero_cta_destination || "auto").toLowerCase();
-  const autoplay = enabled(s.hero_autoplay);
-  const interval = Math.max(3, Number(s.hero_interval) || 6) * 1000;
-  hero.style.setProperty("--hero-interval", interval + "ms");
-
-  const slideEls = $$(".hero-slide", track);
-  let idx = n > 1 ? 1 : 0;
-  let timer = null;
-  let animating = false;
-
-  const realIndex = () => n > 1 ? ((idx - 1) % n + n) % n : 0;
-
-  const playCurrentVideo = () => {
-    slideEls.forEach(el => {
-      const v = $("video", el);
-      if (!v) return;
-      if (el.classList.contains("current")) { v.play().catch(() => {}); }
-      else { v.pause(); }
-    });
   };
-
-  const updateCard = () => {
-    const sl = slides[realIndex()];
-    if (!sl || !card) return;
-    card.classList.remove("in");
-    // force reflow so the entrance animation replays on every slide change
-    void card.offsetWidth;
-    cardTitle.textContent = sl.title || "";
-    cardCta.setAttribute("href", dest === "auto" || !dest ? (sl.href || "#") : "#/" + dest.replace(/^#\/?/, ""));
-    cardCta.onclick = e => {
-      if (sl.film && (sl.film.yt || sl.film.vimeo || sl.film.file) && (dest === "auto" || !dest)) {
-        e.preventDefault();
-        openFilmModal(sl.film);
+}
+function stagesBlock(f) {
+  var idx = A.STAGES.indexOf(f.stage);
+  return '<div class="pb"><div class="prog big"><i style="width:' + f.progress + '%"></i></div><ol class="stl">' + A.STAGES.map(function (s, i) {
+    return '<li' + (i === idx ? ' class="now"' : i < idx ? ' class="done"' : "") + ">" + esc(s) + "</li>";
+  }).join("") + "</ol>" + (f.update ? '<p class="up"><b>' + (f.updateDate ? esc(dateOf(f.updateDate)) + "</b> &nbsp; " : "</b>") + esc(f.update) + "</p>" : "") + "</div>";
+}
+function pFilm(slug) {
+  var f = D.films.filter(function (x) { return x.slug === slug; })[0];
+  if (!f) return notFound("film");
+  var n = D.films.length, i = D.films.indexOf(f), prev = n > 1 ? D.films[(i + n - 1) % n] : null, next = n > 1 ? D.films[(i + 1) % n] : null;
+  var stills = unique([f.thumb].concat(f.gallery)), hero = stills[0] || "";
+  var playable = !!(f.yt || f.vimeo || f.file);
+  var facts = [
+    ["Status", f.wip ? "In progress: " + f.stage : "Finished"], ["Type", f.type], [f.wip ? "Aiming for" : "Made", f.date ? dateOf(f.date) : f.year],
+    ["Length", f.length], ["Role", f.role]
+  ].filter(function (r) { return r[1]; });
+  var html = '<a class="back rv" href="#/films">&larr; All films</a>' +
+    '<div class="stagebox rv" id="stagebox">' + (hero ? img(hero, 960, f.title, "stage-img", true) : "") + '<div class="grad"></div>' +
+    (playable ? '<button class="play" id="play" type="button"><i></i>' + (f.wip ? "Watch the teaser" : "Play film") + "</button>" : (f.wip ? '<span class="badge">In progress &middot; ' + esc(f.stage) + "</span>" : "")) +
+    (stills.length > 1 ? '<span class="fc" id="fc"></span>' : "") + "</div>" +
+    (stills.length > 1 ? '<div class="stills rv" id="stills">' + stills.map(function (s, x) { return '<button type="button" data-i="' + x + '" aria-label="Frame ' + (x + 1) + '"' + (x ? "" : ' aria-current="true"') + ">" + img(s, 480, "", "") + "</button>"; }).join("") + "</div>" : "") +
+    '<div class="fd"><div class="rv"><h1 class="a">' + upper(f.title) + "</h1>" + (f.description ? '<div class="desc">' + md(f.description) + "</div>" : "") + (f.wip ? stagesBlock(f) : "") + "</div>" +
+    '<dl class="facts rv">' + facts.map(function (r) { return "<dt>" + esc(r[0]) + "</dt><dd>" + esc(r[1]) + "</dd>"; }).join("") + (f.credits ? "<dt>Credits</dt><dd class=\"cr\">" + esc(f.credits).replace(/\n/g, "<br>") + "</dd>" : "") + "</dl></div>" +
+    (prev || next ? '<div class="pn rv">' + (prev ? '<a href="#/film/' + esc(prev.slug) + '">&larr; ' + esc(prev.title) + "</a>" : "<span></span>") + (next ? '<a href="#/film/' + esc(next.slug) + '">' + esc(next.title) + " &rarr;</a>" : "") + "</div>" : "");
+  return {
+    key: "film", nav: "films", title: f.title, dark: true, html: wrap(html),
+    bind: function (root) {
+      var stage = $("#stagebox", root), cur = 0, playing = false, im = $(".stage-img", root);
+      if (im && hero) upgrade(im, hero, 1600);
+      function frame(k) {
+        if (playing || stills.length < 2) return;
+        cur = (k + stills.length) % stills.length;
+        im.src = imgUrl(stills[cur], 1280); im.dataset.p = stills[cur]; im.dataset.fb = "0";
+        $("#fc", root).textContent = "FRAME " + pad(cur + 1) + " / " + pad(stills.length);
+        $$("#stills button", root).forEach(function (b, x) { b.setAttribute("aria-current", x === cur ? "true" : "false"); });
       }
+      if (stills.length > 1) { $$("#stills button", root).forEach(function (b) { b.onclick = function () { frame(+b.dataset.i); }; }); frame(0); }
+      var pl = $("#play", root);
+      if (pl) pl.onclick = function () {
+        playing = true;
+        var media = f.yt ? '<iframe src="https://www.youtube-nocookie.com/embed/' + esc(f.yt) + '?autoplay=1&rel=0" title="' + esc(f.title) + '" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>'
+          : f.vimeo ? '<iframe src="https://player.vimeo.com/video/' + esc(f.vimeo) + '?autoplay=1" title="' + esc(f.title) + '" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>'
+          : '<video src="' + esc(A.sitePath(f.file)) + '" controls autoplay playsinline></video>';
+        stage.classList.add("playing"); stage.innerHTML = media;
+      };
+    }
+  };
+}
+
+/* ---- photography ---- */
+var ps = { series: "", tag: "", camera: "", sort: "new", free: false };
+var wallList = [];
+function photoItems(list) {
+  return list.map(function (p) {
+    return {
+      path: p.image, slug: p.slug, title: p.title || p.caption || "Photograph", caption: p.title ? p.caption : "", description: p.description, story: p.story,
+      date: p.date, series: p.series, tags: p.tags, download: p.download,
+      specs: [["Camera", p.camera], ["Lens", p.lens], ["ISO", p.iso], ["Shutter", p.shutter], ["Aperture", p.aperture], ["Focal length", p.focal]].filter(function (r) { return r[1]; })
     };
-    card.classList.add("in");
-  };
-
-  const markCurrent = () => {
-    slideEls.forEach((el, i) => el.classList.toggle("current", i === idx));
-    $$(".hero-dot", hero).forEach(d => d.classList.toggle("active", Number(d.dataset.i) === realIndex()));
-    updateCard();
-    playCurrentVideo();
-  };
-  const setX = animate => {
-    track.classList.toggle("no-anim", !animate);
-    track.style.transform = `translate3d(${-idx * 100}%,0,0)`;
-  };
-
-  setX(false);
-  requestAnimationFrame(() => requestAnimationFrame(markCurrent));
-
-  if (n === 1) { heroCleanup = () => {}; return; }
-
-  const goTo = target => {
-    if (animating) return;
-    animating = true;
-    idx = target;
-    setX(true);
-    markCurrent();
-  };
-  const onTransEnd = e => {
-    if (e.target !== track) return;
-    animating = false;
-    if (idx === 0) { idx = n; setX(false); markCurrent(); }
-    else if (idx === n + 1) { idx = 1; setX(false); markCurrent(); }
-  };
-  track.addEventListener("transitionend", onTransEnd);
-
-  const next = () => goTo(idx + 1);
-  const prev = () => goTo(idx - 1);
-  $("#heroNext", hero).addEventListener("click", () => { next(); restart(); });
-  $("#heroPrev", hero).addEventListener("click", () => { prev(); restart(); });
-  $$(".hero-dot", hero).forEach(d => d.addEventListener("click", () => { goTo(Number(d.dataset.i) + 1); restart(); }));
-
-  const start = () => {
-    if (!autoplay || timer) return;
-    hero.classList.add("autoplaying");
-    timer = setInterval(next, interval);
-  };
-  const stop = () => { hero.classList.remove("autoplaying"); clearInterval(timer); timer = null; };
-  const restart = () => { stop(); start(); };
-  hero.addEventListener("mouseenter", stop);
-  hero.addEventListener("mouseleave", start);
-  const onVis = () => document.hidden ? stop() : start();
-  document.addEventListener("visibilitychange", onVis);
-  start();
-
-  /* drag / swipe */
-  let dragStart = null, dragDX = 0;
-  const width = () => hero.clientWidth || 1;
-  track.addEventListener("pointerdown", e => {
-    if (animating || e.target.closest("a, button")) return;
-    dragStart = e.clientX; dragDX = 0;
-    hero.classList.add("dragging");
-    track.setPointerCapture(e.pointerId);
-    stop();
-  });
-  track.addEventListener("pointermove", e => {
-    if (dragStart == null) return;
-    dragDX = e.clientX - dragStart;
-    track.style.transform = `translate3d(calc(${-idx * 100}% + ${dragDX}px),0,0)`;
-  });
-  const endDrag = () => {
-    if (dragStart == null) return;
-    hero.classList.remove("dragging");
-    const t = width() * 0.14;
-    if (dragDX < -t) goTo(idx + 1);
-    else if (dragDX > t) goTo(idx - 1);
-    else setX(true);
-    dragStart = null; dragDX = 0;
-    start();
-  };
-  track.addEventListener("pointerup", endDrag);
-  track.addEventListener("pointercancel", endDrag);
-  track.addEventListener("click", e => {
-    if (Math.abs(dragDX) > 6) { e.preventDefault(); e.stopPropagation(); }
-  }, true);
-
-  /* trackpad horizontal swipe */
-  let wheelAcc = 0, wheelLock = false;
-  const lockWheel = () => { wheelAcc = 0; wheelLock = true; setTimeout(() => { wheelLock = false; }, 750); };
-  const onWheel = e => {
-    if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
-    e.preventDefault();
-    if (wheelLock) return;
-    wheelAcc += e.deltaX;
-    if (wheelAcc > 70) { next(); restart(); lockWheel(); }
-    else if (wheelAcc < -70) { prev(); restart(); lockWheel(); }
-  };
-  hero.addEventListener("wheel", onWheel, { passive: false });
-
-  heroCleanup = () => {
-    stop();
-    document.removeEventListener("visibilitychange", onVis);
-  };
-}
-
-/* ---------------- PHOTOGRAPHY ---------------- */
-const galleryState = { series: "All", tags: [], sort: "new", camera: "All" };
-
-function renderPhotography(app, params) {
-  if (params.get("series")) galleryState.series = params.get("series");
-  if (params.get("tag")) galleryState.tags = [params.get("tag")];
-  const s = D.site;
-  const seriesNames = D.series.map(x => x.title);
-  D.photos.forEach(p => p.series.forEach(x => { if (x && !seriesNames.includes(x)) seriesNames.push(x); }));
-  const allTags = [...new Set(D.photos.flatMap(p => p.tags))].sort((a, b) => a.localeCompare(b));
-  const allCameras = [...new Set(D.photos.map(p => p.camera).filter(Boolean))].sort();
-
-  app.innerHTML = `<div class="page">
-    <div class="page-head">
-      <span class="kicker">${esc(s.photography_kicker || "Photography")}</span>
-      <h1>${esc(s.photography_heading || "The gallery")}</h1>
-      <p>${esc(s.photography_intro || "")}</p>
-    </div>
-    <div class="filter-bar">
-      <div class="chip-row" id="seriesRow">
-        <span class="row-label">Series</span>
-        ${["All", ...seriesNames].map(x => `<button class="chip" data-series="${attr(x)}">${esc(x)}</button>`).join("")}
-      </div>
-      ${allTags.length ? `<div class="chip-row" id="tagRow">
-        <span class="row-label">Tags</span>
-        ${allTags.map(t => `<button class="chip chip-sm" data-tag="${attr(t)}">${esc(t)}</button>`).join("")}
-      </div>` : ""}
-      <div class="chip-row">
-        <span class="row-label">Sort</span>
-        <select class="select" id="sortSel">
-          <option value="new">Newest first</option>
-          <option value="old">Oldest first</option>
-        </select>
-        ${allCameras.length ? `<select class="select" id="cameraSel">
-          <option value="All">All cameras</option>
-          ${allCameras.map(c => `<option value="${attr(c)}">${esc(c)}</option>`).join("")}
-        </select>` : ""}
-        <button class="btn-link" id="clearFilters" style="margin-left:6px">Clear</button>
-      </div>
-    </div>
-    <section class="section" style="padding-top:0">
-      <div class="masonry grid-anim" id="galleryGrid"></div>
-      <p class="empty-note" id="galleryEmpty" hidden>No photos match those filters yet.</p>
-    </section>
-  </div>`;
-
-  const syncChips = () => {
-    $$("#seriesRow .chip", app).forEach(c => c.classList.toggle("active", c.dataset.series === galleryState.series));
-    $$("#tagRow .chip", app).forEach(c => c.classList.toggle("active", galleryState.tags.includes(c.dataset.tag)));
-    const ss = $("#sortSel", app); if (ss) ss.value = galleryState.sort;
-    const cs = $("#cameraSel", app); if (cs) cs.value = galleryState.camera;
-  };
-
-  const applyFilters = () => {
-    let list = D.photos.slice();
-    if (galleryState.series !== "All") list = list.filter(p => p.series.includes(galleryState.series));
-    if (galleryState.tags.length) list = list.filter(p => galleryState.tags.every(t => p.tags.includes(t)));
-    if (galleryState.camera !== "All") list = list.filter(p => p.camera === galleryState.camera);
-    list.sort((a, b) => galleryState.sort === "old" ? (a.date || 0) - (b.date || 0) : (b.date || 0) - (a.date || 0));
-    const grid = $("#galleryGrid", app);
-    grid.innerHTML = list.map(p => photoCard(p, { masonry: true })).join("");
-    grid.classList.remove("grid-anim"); void grid.offsetWidth; grid.classList.add("grid-anim");
-    $("#galleryEmpty", app).hidden = list.length > 0;
-    bindImages(grid);
-  };
-
-  $$("#seriesRow .chip", app).forEach(c => c.addEventListener("click", () => {
-    galleryState.series = c.dataset.series; syncChips(); applyFilters();
-  }));
-  $$("#tagRow .chip", app).forEach(c => c.addEventListener("click", () => {
-    const t = c.dataset.tag;
-    galleryState.tags = galleryState.tags.includes(t)
-      ? galleryState.tags.filter(x => x !== t) : [...galleryState.tags, t];
-    syncChips(); applyFilters();
-  }));
-  const ss = $("#sortSel", app); if (ss) ss.addEventListener("change", () => { galleryState.sort = ss.value; applyFilters(); });
-  const cs = $("#cameraSel", app); if (cs) cs.addEventListener("change", () => { galleryState.camera = cs.value; applyFilters(); });
-  $("#clearFilters", app).addEventListener("click", () => {
-    galleryState.series = "All"; galleryState.tags = []; galleryState.camera = "All"; galleryState.sort = "new";
-    syncChips(); applyFilters();
-  });
-
-  syncChips();
-  applyFilters();
-}
-
-/* ---------------- PHOTO DETAIL ---------------- */
-function renderPhotoPage(app, slug) {
-  const p = D.photos.find(x => x.slug === slug);
-  if (!p) { app.innerHTML = `<div class="loader"><span>Photo not found.</span></div>`; return; }
-  const ordered = D.photos;
-  const i = ordered.indexOf(p);
-  const prev = ordered[i - 1], next = ordered[i + 1];
-
-  const related = D.photos
-    .filter(x => x !== p)
-    .map(x => ({ x, score: x.series.filter(s => p.series.includes(s)).length * 2 + x.tags.filter(t => p.tags.includes(t)).length }))
-    .sort((a, b) => b.score - a.score || (b.x.date || 0) - (a.x.date || 0))
-    .slice(0, 4).filter(r => r.score > 0).map(r => r.x);
-
-  const specs = [
-    ["Date taken", fmtDate(p.date)],
-    ["Camera", p.camera], ["Lens", p.lens],
-    ["ISO", p.iso], ["Shutter speed", p.shutter],
-    ["Aperture", p.aperture], ["Focal length", p.focal]
-  ].filter(([, v]) => v);
-
-  app.innerHTML = `<div class="photo-page">
-    <div class="back-bar">
-      <button class="btn-link" id="backBtn">${iconChevL(15)} Back</button>
-      ${p.download ? `<a class="btn btn-primary" href="${attr(p.image)}" download>${iconDownload(15)} Download</a>` : ""}
-    </div>
-    <div class="photo-stage">
-      ${prev ? `<button class="photo-nav-btn prev" id="pPrev" aria-label="Previous photo">${iconChevL(18)}</button>` : ""}
-      <img id="detailImg" src="${attr(p.image)}" alt="${attr(p.title)}" crossorigin="anonymous">
-      ${next ? `<button class="photo-nav-btn next" id="pNext" aria-label="Next photo">${iconChevR(18)}</button>` : ""}
-    </div>
-    <div class="photo-info">
-      <div data-reveal>
-        <span class="kicker">${esc(p.series[0] || "Photograph")}</span>
-        <h1 style="margin:10px 0 12px">${esc(p.title || p.caption)}</h1>
-        ${p.caption && p.title ? `<p class="dim" style="font-style:italic;margin-bottom:14px">${esc(p.caption)}</p>` : ""}
-        ${p.description ? `<p style="font-size:16px;line-height:1.75">${esc(p.description)}</p>` : ""}
-        ${p.story ? `<p class="story">${esc(p.story)}</p>` : ""}
-        <div class="chip-row" style="margin-top:26px">
-          ${p.series.map(sr => `<a class="chip-static" href="#/photography?series=${encodeURIComponent(sr)}">${esc(sr)}</a>`).join("")}
-          ${p.tags.map(t => `<a class="chip-static" href="#/photography?tag=${encodeURIComponent(t)}" style="opacity:.75">#${esc(t)}</a>`).join("")}
-        </div>
-      </div>
-      <div data-reveal>
-        ${specs.length ? `<div class="spec-table">
-          ${specs.map(([k, v]) => `<div class="spec-cell"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div></div>`).join("")}
-        </div>` : ""}
-        <div id="paletteWrap" hidden style="margin-top:22px">
-          <span style="font-family:var(--font-head);font-size:11px;letter-spacing:.26em;text-transform:uppercase;color:var(--text-faint)">Dominant colours</span>
-          <div class="palette-row" id="paletteRow"></div>
-        </div>
-      </div>
-    </div>
-    ${related.length ? `<section class="section" style="padding-top:0" data-reveal>
-      <div class="section-head"><div><span class="kicker">More like this</span><h2>Related photos</h2></div></div>
-      <div class="grid-photos grid-anim">${related.map(r => photoCard(r)).join("")}</div>
-    </section>` : ""}
-  </div>`;
-
-  $("#backBtn", app).addEventListener("click", () => {
-    history.length > 1 ? history.back() : go("#/photography");
-  });
-  if (prev) $("#pPrev", app).addEventListener("click", () => go("#/photo/" + prev.slug));
-  if (next) $("#pNext", app).addEventListener("click", () => go("#/photo/" + next.slug));
-
-  const img = $("#detailImg", app);
-  const runPalette = () => extractPalette(img).then(colors => {
-    if (!colors.length) return;
-    $("#paletteWrap", app).hidden = false;
-    $("#paletteRow", app).innerHTML = colors.map((c, ci) =>
-      `<span class="palette-dot" title="${attr(c)}" style="background:${attr(c)};animation-delay:${ci * 90}ms"></span>`).join("");
-  }).catch(() => {});
-  img.complete ? runPalette() : img.addEventListener("load", runPalette);
-}
-
-async function extractPalette(img, count = 5) {
-  const c = document.createElement("canvas");
-  const w = 72, h = Math.max(1, Math.round(72 * img.naturalHeight / (img.naturalWidth || 1)));
-  c.width = w; c.height = h;
-  const ctx = c.getContext("2d", { willReadFrequently: true });
-  ctx.drawImage(img, 0, 0, w, h);
-  const px = ctx.getImageData(0, 0, w, h).data;
-  const buckets = new Map();
-  for (let i = 0; i < px.length; i += 4) {
-    if (px[i + 3] < 200) continue;
-    const key = ((px[i] >> 4) << 8) | ((px[i + 1] >> 4) << 4) | (px[i + 2] >> 4);
-    const b = buckets.get(key) || { n: 0, r: 0, g: 0, b: 0 };
-    b.n++; b.r += px[i]; b.g += px[i + 1]; b.b += px[i + 2];
-    buckets.set(key, b);
-  }
-  const sorted = [...buckets.values()].sort((a, b) => b.n - a.n)
-    .map(b => [Math.round(b.r / b.n), Math.round(b.g / b.n), Math.round(b.b / b.n)]);
-  const picked = [];
-  for (const rgb of sorted) {
-    if (picked.every(p => Math.abs(p[0] - rgb[0]) + Math.abs(p[1] - rgb[1]) + Math.abs(p[2] - rgb[2]) > 72))
-      picked.push(rgb);
-    if (picked.length >= count) break;
-  }
-  return picked.map(([r, g, b]) => "#" + [r, g, b].map(v => v.toString(16).padStart(2, "0")).join(""));
-}
-
-/* ---------------- DOWNLOADS ---------------- */
-function renderDownloads(app) {
-  const s = D.site;
-  const list = D.photos.filter(p => p.download);
-  app.innerHTML = `<div class="page">
-    <div class="page-head">
-      <span class="kicker">${esc(s.downloads_kicker || "Free to use")}</span>
-      <h1>${esc(s.downloads_heading || "Downloads")}</h1>
-      <p>${esc(s.downloads_intro || "")}</p>
-    </div>
-    <section class="section" style="padding-top:16px">
-      ${list.length ? `<div class="grid-photos grid-anim">
-        ${list.map(p => `<div class="dl-item">
-          ${photoCard(p)}
-          <a class="btn btn-ghost" style="width:100%" href="${attr(p.image)}" download>${iconDownload(15)} Download</a>
-        </div>`).join("")}
-      </div>` : `<p class="empty-note">No downloadable photos yet — check back soon.</p>`}
-    </section>
-  </div>`;
-}
-
-/* ---------------- FILMS ---------------- */
-function renderFilms(app) {
-  const s = D.site;
-  const types = [...new Set(D.films.map(f => f.type).filter(Boolean))];
-  app.innerHTML = `<div class="page">
-    <div class="page-head">
-      <span class="kicker">${esc(s.films_kicker || "Filmography")}</span>
-      <h1>${esc(s.films_heading || "Films")}</h1>
-      <p>${esc(s.films_intro || "")}</p>
-    </div>
-    ${types.length > 1 ? `<div class="filter-bar"><div class="chip-row" id="filmTypeRow">
-      ${["All", ...types].map(t => `<button class="chip ${t === "All" ? "active" : ""}" data-type="${attr(t)}">${esc(t)}</button>`).join("")}
-    </div></div>` : ""}
-    <section class="section" style="padding-top:0">
-      ${D.films.length
-        ? `<div class="grid-films grid-anim" id="filmGrid">${D.films.map(f => filmCard(f)).join("")}</div>`
-        : `<p class="empty-note">Films are coming soon.</p>`}
-    </section>
-  </div>`;
-
-  $$("#filmTypeRow .chip", app).forEach(c => c.addEventListener("click", () => {
-    $$("#filmTypeRow .chip", app).forEach(x => x.classList.remove("active"));
-    c.classList.add("active");
-    const t = c.dataset.type;
-    const list = t === "All" ? D.films : D.films.filter(f => f.type === t);
-    const grid = $("#filmGrid", app);
-    grid.innerHTML = list.map(f => filmCard(f)).join("");
-    grid.classList.remove("grid-anim"); void grid.offsetWidth; grid.classList.add("grid-anim");
-    bindImages(grid); bindFilmCards(grid);
-  }));
-  bindFilmCards(app);
-}
-
-function bindFilmCards(root) {
-  $$("[data-film]", root).forEach(card => card.addEventListener("click", () => {
-    const f = D.films.find(x => x.slug === card.dataset.film);
-    if (f) openFilmModal(f);
-  }));
-}
-
-function openFilmModal(f) {
-  closeFilmModal();
-  let media;
-  if (f.yt) media = `<iframe src="https://www.youtube-nocookie.com/embed/${attr(f.yt)}?autoplay=1&rel=0" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>`;
-  else if (f.vimeo) media = `<iframe src="https://player.vimeo.com/video/${attr(f.vimeo)}?autoplay=1" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>`;
-  else if (f.file) media = `<video src="${attr(f.file)}" controls autoplay playsinline></video>`;
-  else media = `<div class="modal-empty">No video source set</div>`;
-
-  const meta = [f.type, f.year, f.length].filter(Boolean).join(" · ");
-  filmModalEl = document.createElement("div");
-  filmModalEl.className = "modal-backdrop";
-  filmModalEl.innerHTML = `
-    <button class="modal-close" aria-label="Close">✕</button>
-    <div class="modal-box">
-      <div class="modal-frame">${media}</div>
-      <div class="modal-caption">
-        <div><span class="film-title" style="font-size:24px">${esc(f.title)}</span>
-        ${meta ? `<div class="film-meta" style="margin-top:4px">${esc(meta)}</div>` : ""}</div>
-        ${f.description ? `<p class="dim" style="max-width:60ch;font-size:14px">${esc(f.description)}</p>` : ""}
-      </div>
-    </div>`;
-  filmModalEl.addEventListener("click", e => {
-    if (e.target === filmModalEl || e.target.closest(".modal-close")) closeFilmModal();
-  });
-  document.body.appendChild(filmModalEl);
-  document.body.style.overflow = "hidden";
-}
-function closeFilmModal() {
-  if (filmModalEl) { filmModalEl.remove(); filmModalEl = null; document.body.style.overflow = ""; }
-}
-
-/* ---------------- NEWS ---------------- */
-function renderNews(app) {
-  const s = D.site;
-  app.innerHTML = `<div class="page">
-    <div class="page-head">
-      <span class="kicker">${esc(s.news_kicker || "Journal")}</span>
-      <h1>${esc(s.news_heading || "News")}</h1>
-      <p>${esc(s.news_intro || "")}</p>
-    </div>
-    <section class="section" style="padding-top:16px">
-      ${D.news.length
-        ? `<div class="grid-news grid-anim">${D.news.map(n => newsCard(n)).join("")}</div>`
-        : `<p class="empty-note">No news yet — check back soon.</p>`}
-    </section>
-  </div>`;
-}
-
-function renderArticle(app, slug) {
-  const n = D.news.find(x => x.slug === slug);
-  if (!n) { renderNews(app); return; }
-  app.innerHTML = `<div class="page"><article class="article">
-    <button class="btn-link" id="backBtn" style="margin-bottom:26px">${iconChevL(15)} All news</button>
-    <span class="news-date">${esc(fmtDate(n.date))}</span>
-    <h1 style="margin:10px 0 0">${esc(n.title)}</h1>
-    ${n.image ? `<div class="lede-img"><img src="${attr(n.image)}" alt=""></div>` : ""}
-    <div class="article-body">${md(n.body)}</div>
-  </article></div>`;
-  $("#backBtn", app).addEventListener("click", () => go("#/news"));
-}
-
-/* ---------------- ABOUT ---------------- */
-function renderAbout(app) {
-  const a = D.about;
-  const links = (Array.isArray(a.links) ? a.links : []).filter(x => x && x.url);
-  app.innerHTML = `<div class="page">
-    <div class="page-head">
-      <span class="kicker">${esc(a.kicker || "About")}</span>
-      <h1>${esc(a.heading || "About")}</h1>
-      <p>${esc(a.intro || "")}</p>
-    </div>
-    <div class="about-grid">
-      ${a.image ? `<div class="about-photo" data-reveal><img src="${attr(a.image)}" alt="Portrait"></div>` : "<div></div>"}
-      <div data-reveal>
-        <div class="article-body" style="font-size:17px">${md(a.body || "")}</div>
-        ${listify(a.capabilities).length ? `<div class="chip-row" style="margin-top:30px">
-          ${listify(a.capabilities).map(c => `<span class="chip-static">${esc(c)}</span>`).join("")}
-        </div>` : ""}
-        <div style="margin-top:34px;display:flex;gap:12px;flex-wrap:wrap">
-          <a class="btn btn-primary" href="${attr(a.button_url || "#/contact")}">${esc(a.button_label || "Get in touch")}</a>
-          ${links.map(l => `<a class="btn btn-ghost" href="${attr(l.url)}" target="_blank" rel="noopener">${esc(l.label)}</a>`).join("")}
-        </div>
-      </div>
-    </div>
-  </div>`;
-}
-
-/* ---------------- CONTACT ---------------- */
-function renderContact(app) {
-  const c = D.contact;
-  const socials = (Array.isArray(c.socials) ? c.socials : []).filter(x => x && x.url);
-  app.innerHTML = `<div class="page">
-    <div class="contact-wrap">
-      <span class="kicker">${esc(c.kicker || "Contact")}</span>
-      <h1 style="margin:12px 0 16px">${esc(c.heading || "Let's talk.")}</h1>
-      <p class="dim" style="max-width:52ch;font-size:16.5px;margin-bottom:44px">${esc(c.intro || "")}</p>
-      ${c.email ? `<a class="contact-email" href="mailto:${attr(c.email)}">${esc(c.email)}</a>` : ""}
-      ${c.email_note ? `<p class="dim" style="margin-top:18px;font-size:13.5px">${esc(c.email_note)}</p>` : ""}
-      ${c.location || c.availability ? `<div class="contact-extra">
-        ${c.location ? `<div><span class="k">Based in</span><span class="v">${esc(c.location)}</span></div>` : ""}
-        ${c.availability ? `<div><span class="k">Availability</span><span class="v">${esc(c.availability)}</span></div>` : ""}
-      </div>` : ""}
-      ${socials.length ? `<div class="social-row">
-        ${socials.map(sx => `<a class="chip" href="${attr(sx.url)}" target="_blank" rel="noopener">${esc(sx.label)}</a>`).join("")}
-      </div>` : ""}
-    </div>
-  </div>`;
-}
-
-/* ---------------- image + reveal binding ---------------- */
-function bindImages(root) {
-  $$("img[data-lazy]", root).forEach(img => {
-    const done = () => img.classList.add("loaded");
-    img.complete && img.naturalWidth ? done() : img.addEventListener("load", done, { once: true });
-    img.addEventListener("error", done, { once: true });
   });
 }
+function pPhotography(q) {
+  if (q && q.has("series")) ps.series = q.get("series");
+  if (q && q.has("tag")) ps.tag = q.get("tag");
+  if (q && q.has("free")) ps.free = q.get("free") === "1";
+  var series = unique(D.series.map(function (s) { return s.title; }).concat(D.photos.reduce(function (a, p) { return a.concat(p.series); }, [])));
+  var tags = unique(D.photos.reduce(function (a, p) { return a.concat(p.tags); }, [])).sort(function (a, b) { return a.localeCompare(b); });
+  var cams = unique(D.photos.map(function (p) { return p.camera; })).sort();
+  var anyFree = D.photos.some(function (p) { return p.download; });
+  var html = pageHead(setting("photography_heading", "Photography"), setting("photography_intro", "Stills from the archive. Some are free to download.")) +
+    (D.photos.length ? '<div class="bar rv">' + (series.length ? tabs("series", [["", "All"]].concat(series.map(function (s) { return [s, s]; })), ps.series) : "") +
+      '<div class="bar-r">' + (anyFree ? '<button type="button" class="tab sw" id="free" aria-pressed="' + ps.free + '">Free to download</button>' : "") +
+      (tags.length ? select("ptag", "Tag", [["", "All tags"]].concat(tags.map(function (t) { return [t, "#" + t]; })), ps.tag) : "") +
+      (cams.length > 1 ? select("pcam", "Camera", [["", "All cameras"]].concat(cams.map(function (c) { return [c, c]; })), ps.camera) : "") +
+      select("psort", "Sort", [["new", "Newest first"], ["old", "Oldest first"], ["az", "A to Z"]], ps.sort) + '<span class="count" id="pcount"></span></div></div><div class="wall" id="wall"></div>'
+      : empty("No photos here yet."));
+  return {
+    key: "photography", nav: "photography", title: setting("photography_heading", "Photography"), dark: true, html: wrap(html),
+    bind: function (root) {
+      if (!D.photos.length) return;
+      function draw() {
+        var l = D.photos.filter(function (p) {
+          return (!ps.series || p.series.indexOf(ps.series) > -1) && (!ps.tag || p.tags.indexOf(ps.tag) > -1) && (!ps.camera || p.camera === ps.camera) && (!ps.free || p.download);
+        });
+        l.sort(function (a, b) { return ps.sort === "az" ? (a.title || "").localeCompare(b.title || "") : ps.sort === "old" ? (a.date || 0) - (b.date || 0) : (b.date || 0) - (a.date || 0); });
+        wallList = photoItems(l);
+        $("#pcount", root).textContent = l.length + (l.length === 1 ? " photo" : " photos");
+        $("#wall", root).innerHTML = l.length ? l.map(function (p, i) {
+          return '<figure class="ph1 rv" data-i="' + i + '" tabindex="0" role="button" aria-label="' + esc("Open " + (p.title || "photo")) + '">' + img(p.image, 640, p.title, "") +
+            "<figcaption><span>" + esc(p.title || "") + "</span>" + (p.download ? '<b class="free">Free</b>' : "") + "</figcaption></figure>";
+        }).join("") : empty("No photos match those filters yet.");
+        $$(".ph1", root).forEach(function (f) {
+          f.onclick = function () { openLb(wallList, +f.dataset.i, f); };
+          f.onkeydown = function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openLb(wallList, +f.dataset.i, f); } };
+        });
+        reveal($("#wall", root));
+      }
+      var el;
+      (el = $("#ptag", root)) && (el.onchange = function () { ps.tag = this.value; draw(); });
+      (el = $("#pcam", root)) && (el.onchange = function () { ps.camera = this.value; draw(); });
+      $("#psort", root).onchange = function () { ps.sort = this.value; draw(); };
+      (el = $("#free", root)) && (el.onclick = function () { ps.free = !ps.free; this.setAttribute("aria-pressed", String(ps.free)); draw(); });
+      bindTabs(root, ps, draw);
+      draw();
+    }
+  };
+}
 
-let revealObserver = null;
-function bindReveal(root) {
-  if (!("IntersectionObserver" in window)) {
-    $$("[data-reveal]", root).forEach(el => el.classList.add("in"));
-    return;
-  }
-  if (!revealObserver) {
-    revealObserver = new IntersectionObserver(entries => {
-      entries.forEach(en => {
-        if (en.isIntersecting) { en.target.classList.add("in"); revealObserver.unobserve(en.target); }
+/* ---- one photo ---- */
+function pPhoto(slug) {
+  var p = D.photos.filter(function (x) { return x.slug === slug; })[0];
+  if (!p) return notFound("photo");
+  var i = D.photos.indexOf(p), prev = D.photos[i - 1], next = D.photos[i + 1];
+  var related = D.photos.filter(function (x) { return x !== p; }).map(function (x) {
+    return { x: x, s: x.series.filter(function (s) { return p.series.indexOf(s) > -1; }).length * 2 + x.tags.filter(function (t) { return p.tags.indexOf(t) > -1; }).length };
+  }).sort(function (a, b) { return b.s - a.s || (b.x.date || 0) - (a.x.date || 0); }).filter(function (r) { return r.s > 0; }).slice(0, 4).map(function (r) { return r.x; });
+  var specs = [["Date taken", fmtDate(p.date)], ["Camera", p.camera], ["Lens", p.lens], ["ISO", p.iso], ["Shutter speed", p.shutter], ["Aperture", p.aperture], ["Focal length", p.focal]].filter(function (r) { return r[1]; });
+  var html = '<div class="topline rv"><a class="back" href="#/photography">&larr; All photos</a>' + (p.download ? dlButton(p.image, p.slug, "Download") : "") + "</div>" +
+    '<div class="photo-stage rv">' + (prev ? '<a class="pn-btn prev" href="#/photo/' + esc(prev.slug) + '" aria-label="Previous photo">&larr;</a>' : "") +
+    img(p.image, 640, p.title, "detail", true).replace("<img ", '<img id="detailImg" crossorigin="anonymous" ') + (next ? '<a class="pn-btn next" href="#/photo/' + esc(next.slug) + '" aria-label="Next photo">&rarr;</a>' : "") + "</div>" +
+    '<div class="pinfo"><div class="rv"><span class="cap">' + esc(p.series[0] || "Photograph") + '</span><h1 class="a">' + upper(p.title || p.caption) + "</h1>" +
+    (p.caption && p.title ? '<p class="dim"><em>' + esc(p.caption) + "</em></p>" : "") + (p.description ? "<p>" + esc(p.description) + "</p>" : "") + (p.story ? '<p class="story">' + esc(p.story) + "</p>" : "") +
+    '<p class="chips">' + p.series.map(function (s) { return '<a class="chip" href="#/photography?series=' + encodeURIComponent(s) + '">' + esc(s) + "</a>"; }).join("") +
+    p.tags.map(function (t) { return '<a class="chip dim" href="#/photography?tag=' + encodeURIComponent(t) + '">#' + esc(t) + "</a>"; }).join("") + "</p></div>" +
+    '<div class="rv">' + (specs.length ? '<dl class="specs">' + specs.map(function (r) { return "<div><dt>" + esc(r[0]) + "</dt><dd>" + esc(r[1]) + "</dd></div>"; }).join("") + "</dl>" : "") +
+    '<div id="paletteWrap" hidden><span class="cap">Dominant colours</span><div class="palette" id="palette"></div></div></div></div>' +
+    (related.length ? '<h2 class="a sub rv">' + dot("More like this") + '</h2><div class="grid g4 sq">' + related.map(function (r) { return photoTile(r, 640); }).join("") + "</div>" : "");
+  return {
+    key: "photo", nav: "photography", title: p.title || "Photograph", dark: true, html: wrap(html),
+    bind: function (root) {
+      var im = $("#detailImg", root);
+      upgrade(im, p.image, 2048, function () {
+        extractPalette(im).then(function (cols) {
+          if (!cols.length) return;
+          $("#paletteWrap", root).hidden = false;
+          $("#palette", root).innerHTML = cols.map(function (c, k) { return '<span title="' + esc(c) + '" style="background:' + esc(c) + ";animation-delay:" + k * 90 + 'ms"></span>'; }).join("");
+        }).catch(function () {});
       });
-    }, { rootMargin: "0px 0px -8% 0px", threshold: 0.08 });
-  }
-  $$("[data-reveal]", root).forEach(el => revealObserver.observe(el));
+    }
+  };
 }
-
-/* ---------------- shell ---------------- */
-function buildShell() {
-  const s = D.site;
-  const navLinks = NAV.map(n =>
-    `<a href="#/${n.id}" data-page="${n.id}">${esc(s[n.key] || n.label)}</a>`).join("");
-  $("#navLinks").innerHTML = navLinks;
-  $("#footerLinks").innerHTML = navLinks;
-  $("#mobileLinks").innerHTML = navLinks;
-  $("#footerNote").textContent = s.footer_text || "© Astris";
-  $$(".brand span").forEach(el => { el.textContent = s.brand || "ASTRIS"; });
-  setNavActive(parseHash().page);
-}
-
-function bindShellOnce() {
-  const menu = $("#mobileMenu");
-  $("#navToggle").addEventListener("click", () => menu.classList.add("open"));
-  $("#navClose").addEventListener("click", () => menu.classList.remove("open"));
-  menu.addEventListener("click", e => { if (e.target.tagName === "A") menu.classList.remove("open"); });
-  document.addEventListener("keydown", e => {
-    if (e.key === "Escape") { closeFilmModal(); menu.classList.remove("open"); }
+function extractPalette(im, count) {
+  count = count || 5;
+  return new Promise(function (resolve) {
+    try {
+      var c = document.createElement("canvas"), w = 72, h = Math.max(1, Math.round(72 * im.naturalHeight / (im.naturalWidth || 1)));
+      c.width = w; c.height = h;
+      var ctx = c.getContext("2d", { willReadFrequently: true }); ctx.drawImage(im, 0, 0, w, h);
+      var px = ctx.getImageData(0, 0, w, h).data, buckets = {};
+      for (var i = 0; i < px.length; i += 4) {
+        if (px[i + 3] < 200) continue;
+        var key = ((px[i] >> 4) << 8) | ((px[i + 1] >> 4) << 4) | (px[i + 2] >> 4);
+        var b = buckets[key] || (buckets[key] = { n: 0, r: 0, g: 0, b: 0 });
+        b.n++; b.r += px[i]; b.g += px[i + 1]; b.b += px[i + 2];
+      }
+      var sorted = Object.keys(buckets).map(function (k) { return buckets[k]; }).sort(function (a, b) { return b.n - a.n; })
+        .map(function (b) { return [Math.round(b.r / b.n), Math.round(b.g / b.n), Math.round(b.b / b.n)]; });
+      var picked = [];
+      sorted.forEach(function (rgb) {
+        if (picked.length < count && picked.every(function (p) { return Math.abs(p[0] - rgb[0]) + Math.abs(p[1] - rgb[1]) + Math.abs(p[2] - rgb[2]) > 72; })) picked.push(rgb);
+      });
+      resolve(picked.map(function (c3) { return "#" + c3.map(function (v) { return v.toString(16).padStart(2, "0"); }).join(""); }));
+    } catch (e) { resolve([]); }
   });
 }
+/* show the picture that is already loaded, then swap in the sharper one */
+function upgrade(el, path, w, done) {
+  if (!el) return;
+  var hi = new Image(); hi.crossOrigin = "anonymous";
+  hi.onload = function () { el.src = hi.src; el.dataset.fb = "0"; if (done) { if (el.complete) done(); else el.addEventListener("load", function () { done(); }, { once: true }); } };
+  hi.onerror = function () { if (done && el.complete && el.naturalWidth) done(); };
+  hi.src = imgUrl(path, w);
+}
 
-/* ---------------- boot ---------------- */
-window.addEventListener("hashchange", render);
-document.addEventListener("DOMContentLoaded", () => {
-  bindShellOnce();
-  buildShell();
-  render();
-  loadContent();
+/* ---- news ---- */
+var ns = { tag: "", sort: "new" };
+function pNews() {
+  var tags = unique(D.news.reduce(function (a, n) { return a.concat(n.tags); }, []));
+  var html = pageHead(setting("news_heading", "News"), setting("news_intro", "Releases, behind the scenes, and what the studio is up to.")) +
+    (D.news.length ? '<div class="bar rv">' + (tags.length ? tabs("tag", [["", "All"]].concat(tags.map(function (t) { return [t, t]; })), ns.tag) : "") +
+      '<div class="bar-r">' + select("nsort", "Sort", [["new", "Newest first"], ["old", "Oldest first"]], ns.sort) + '<span class="count" id="ncount"></span></div></div><div id="nout"></div>'
+      : empty("No news yet. Check back soon."));
+  return {
+    key: "news", nav: "news", title: setting("news_heading", "News"), dark: true, html: wrap(html),
+    bind: function (root) {
+      if (!D.news.length) return;
+      function draw() {
+        var l = D.news.filter(function (n) { return !ns.tag || n.tags.indexOf(ns.tag) > -1; });
+        l.sort(function (a, b) { return ns.sort === "old" ? (a.date || 0) - (b.date || 0) : (b.date || 0) - (a.date || 0); });
+        $("#ncount", root).textContent = l.length + (l.length === 1 ? " post" : " posts");
+        if (!l.length) { $("#nout", root).innerHTML = empty("No posts under that topic yet."); return; }
+        var f = l[0];
+        $("#nout", root).innerHTML = '<a class="feat rv" data-dive href="#/news/' + esc(f.slug) + '"><div class="im">' + (f.image ? img(f.image, 1280, f.title, "ci") : '<span class="noim"></span>') + '</div><div><span class="cap">' +
+          esc([f.tags[0], dateOf(f.date)].filter(Boolean).join(" · ")) + '</span><h2 class="a">' + upper(f.title) + "</h2><p>" + esc(f.summary) + '</p><span class="btn o">Read the post <span aria-hidden="true">&rarr;</span></span></div></a>' +
+          l.slice(1).map(newsRow).join("");
+        reveal($("#nout", root));
+      }
+      $("#nsort", root).onchange = function () { ns.sort = this.value; draw(); };
+      bindTabs(root, ns, draw);
+      draw();
+    }
+  };
+}
+function pArticle(slug) {
+  var n = D.news.filter(function (x) { return x.slug === slug; })[0];
+  if (!n) return notFound("post");
+  var c = D.news.length, i = D.news.indexOf(n), prev = c > 1 ? D.news[(i + c - 1) % c] : null, next = c > 1 ? D.news[(i + 1) % c] : null;
+  var html = '<a class="back rv" href="#/news">&larr; All news</a><article class="np"><span class="cap rv">' + esc([n.tags.join(" · "), dateOf(n.date)].filter(Boolean).join(" · ")) + '</span><h1 class="a rv">' + upper(n.title) + "</h1>" +
+    (n.image ? '<div class="hi rv">' + img(n.image, 1280, n.title, "ci", true) + "</div>" : "") +
+    '<div class="tx rv">' + md(n.body) + "</div>" +
+    (n.gallery.length ? '<div class="ng">' + n.gallery.map(function (g, x) { return '<button type="button" class="rv" data-x="' + x + '" aria-label="Open photo ' + (x + 1) + '">' + img(g, 640, "Photo " + (x + 1), "") + "</button>"; }).join("") + "</div>" : "") + "</article>" +
+    (prev || next ? '<div class="pn rv">' + (prev ? '<a href="#/news/' + esc(prev.slug) + '">&larr; ' + esc(prev.title) + "</a>" : "<span></span>") + (next ? '<a href="#/news/' + esc(next.slug) + '">' + esc(next.title) + " &rarr;</a>" : "") + "</div>" : "");
+  return {
+    key: "article", nav: "news", title: n.title, dark: true, html: wrap(html),
+    bind: function (root) {
+      var items = n.gallery.map(function (g) { return { path: g, title: n.title, caption: "", specs: [], series: [], tags: [] }; });
+      $$(".ng button", root).forEach(function (b) { b.onclick = function () { openLb(items, +b.dataset.x, b); }; });
+    }
+  };
+}
+
+/* ---- say hello ---- */
+function pHello() {
+  var ab = D.about, ct = D.contact, em = email(), caps = listify(ab.capabilities);
+  var pic = ab.image ? img(ab.image, 960, "Josh", "me-img", true) : '<img class="me-img" src="/images/silhouette.jpg" alt="Silhouette of a person holding a camera" loading="eager">';
+  var html = '<section class="hello"><div class="rv"><h1 class="a">' + upper(setting("hello_heading", "Say hello")).replace(/\s+/, "<br>") + "<i>.</i></h1>" + (ct.intro && ct.intro.length > 3 ? '<p class="lead">' + esc(ct.intro) + "</p>" : "") + '</div><div class="me rv">' + pic + "</div></section>" +
+    '<section class="contact rv"><div><h4>Email</h4><a class="big" id="em" href="mailto:' + esc(em) + '">' + esc(em) + '</a><p><button class="btn o" id="cp" type="button">Copy email</button></p>' + (ct.email_note ? '<p class="dim">' + esc(ct.email_note) + "</p>" : "") + "</div>" +
+    "<div><h4>About</h4>" + (ab.intro ? "<p>" + esc(ab.intro) + "</p>" : "") + (caps.length ? '<p class="caps">' + caps.map(esc).join(" &middot; ") + "</p>" : "") + (ct.location ? '<p class="dim">Based in ' + esc(ct.location) + "</p>" : "") + (ct.availability ? '<p class="dim">' + esc(ct.availability) + "</p>" : "") + "</div>" +
+    "<div><h4>Follow</h4>" + socials().map(function (s) { var h = handleOf(s.url); return '<p><a class="big sm" href="' + esc(s.url) + '" target="_blank" rel="noopener">' + esc(s.label) + (h ? "<small>" + esc(h) + "</small>" : "") + "</a></p>"; }).join("") + "</div></section>" +
+    (ab.body ? '<section class="bio-body rv">' + md(ab.body) + "</section>" : "");
+  return {
+    key: "hello", nav: "hello", title: "Say hello", dark: true, html: wrap(html),
+    bind: function (root) {
+      $("#cp", root).onclick = function () {
+        var t = em, ok = function () { toast("Email copied"); };
+        function sel() { var r = document.createRange(); r.selectNodeContents($("#em")); var s = getSelection(); s.removeAllRanges(); s.addRange(r); toast("Press Ctrl+C to copy"); }
+        if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(ok, sel); else sel();
+      };
+    }
+  };
+}
+
+/* ============================================================
+   PICTURE VIEWER (photos, and the photos inside news posts)
+   ============================================================ */
+var lb = { list: [], i: 0, opener: null };
+function dlButton(path, slug, text) {
+  var ext = (String(path).match(/\.(jpe?g|png|webp)$/i) || [".jpg"])[0].toLowerCase();
+  return '<a class="btn y" href="' + esc(A.sitePath(path)) + '" download="astris-' + esc(slug || "photo") + ext + '" data-dl="' + esc(path) + '" data-name="astris-' + esc(slug || "photo") + ext + '">' + esc(text) + "</a>";
+}
+function downloadPhoto(path, name) {
+  function save(blob) { var u = URL.createObjectURL(blob), a = document.createElement("a"); a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(u); }, 4000); }
+  function get(url) { return fetch(url).then(function (r) { if (!r.ok || /text\/html/.test(r.headers.get("content-type") || "")) throw new Error("bad"); return r.blob(); }); }
+  toast("Starting your download…");
+  get(A.sitePath(path)).catch(function () { return get(A.rawUrl(path)); }).then(save, function () { window.open(A.rawUrl(path), "_blank"); });
+}
+function openLb(list, i, opener) {
+  lb.list = list; lb.opener = opener || null;
+  var el = $("#lb"); el.hidden = false; document.body.classList.add("lb-open");
+  showLb(i);
+  $(".lb-x", el).focus({ preventScroll: true });
+}
+function showLb(i) {
+  var n = lb.list.length; lb.i = (i + n) % n;
+  var it = lb.list[lb.i], el = $("#lb");
+  el.innerHTML = '<button class="lb-x" type="button" aria-label="Close">&#10005;</button><div class="lb-pic">' + (n > 1 ? '<button class="lb-nv prev" type="button" aria-label="Previous">&larr;</button>' : "") +
+    img(it.path, 1600, it.title, "lb-img", true) + (n > 1 ? '<button class="lb-nv next" type="button" aria-label="Next">&rarr;</button>' : "") + "</div>" +
+    '<aside class="lb-side"><span class="cap">' + esc(it.series && it.series.length ? it.series.join(" · ") : "Photo") + '</span><h2 class="a">' + upper(it.title) + "</h2>" +
+    '<p class="dim">' + esc([dateOf(it.date), n > 1 ? (lb.i + 1) + " of " + n : ""].filter(Boolean).join(" · ")) + "</p>" +
+    (it.caption ? '<p><em>' + esc(it.caption) + "</em></p>" : "") + (it.description ? "<p>" + esc(it.description) + "</p>" : "") +
+    (it.specs && it.specs.length ? '<dl class="specs">' + it.specs.map(function (r) { return "<div><dt>" + esc(r[0]) + "</dt><dd>" + esc(r[1]) + "</dd></div>"; }).join("") + "</dl>" : "") +
+    (it.download ? "<p>" + dlButton(it.path, it.slug, "Download photo") + '</p><p class="dim sm">Free to use. A credit is always appreciated.</p>' : "") +
+    (it.slug ? '<p><a class="link" data-dive=".lb-img" href="#/photo/' + esc(it.slug) + '">Full details &rarr;</a></p>' : "") + "</aside>";
+  [lb.i + 1, lb.i - 1].forEach(function (k) { var o = lb.list[(k + n) % n]; if (o && n > 1) { var pre = new Image(); pre.src = imgUrl(o.path, 1600); } });
+}
+function closeLb() {
+  var el = $("#lb"); if (el.hidden) return;
+  el.hidden = true; el.innerHTML = ""; document.body.classList.remove("lb-open");
+  if (lb.opener && document.contains(lb.opener)) lb.opener.focus({ preventScroll: true });
+}
+function lbBind() {
+  var el = $("#lb"), sx = null;
+  el.addEventListener("click", function (e) {
+    if (e.target.closest(".lb-x") || e.target === el || e.target.classList.contains("lb-pic")) closeLb();
+    else if (e.target.closest(".prev")) showLb(lb.i - 1);
+    else if (e.target.closest(".next")) showLb(lb.i + 1);
+    else if (e.target.closest("[data-dl]")) { e.preventDefault(); var a = e.target.closest("[data-dl]"); downloadPhoto(a.dataset.dl, a.dataset.name); }
+    else if (e.target.closest("a[href^='#']")) closeLb();
+  });
+  el.addEventListener("touchstart", function (e) { sx = e.touches[0].clientX; }, { passive: true });
+  el.addEventListener("touchend", function (e) {
+    if (sx == null) return; var dx = e.changedTouches[0].clientX - sx; sx = null;
+    if (Math.abs(dx) > 55) showLb(lb.i + (dx < 0 ? 1 : -1));
+  }, { passive: true });
+}
+
+/* ============================================================
+   REEL: your showreel behind everything (a slow slideshow of stills until the video is in)
+   ============================================================ */
+var reel = { key: "", timer: 0, mode: "" };
+function reelSlides() {
+  var f = featured().filter(function (x) { return x.kind === "Photo"; });
+  var l = f.length ? f : latest(10).filter(function (x) { return x.kind === "Photo"; });
+  return l.slice(0, 8);
+}
+function setupReel() {
+  var src = String(setting("showreel", setting("hero_video", "")) || "");
+  var slides = reelSlides(), poster = String(setting("showreel_poster", "") || "");
+  var key = [src, poster, slides.map(function (s) { return s.key; }).join(",")].join("|");
+  if (key === reel.key) return;
+  reel.key = key; clearInterval(reel.timer);
+  var host = $("#reel"), v = $("#rv"), box = $("#slides");
+  box.innerHTML = slides.map(function (s, i) { return '<div class="slide' + (i ? "" : " on") + '">' + img(s.img, 1600, "", "", i === 0) + "</div>"; }).join("");
+  var els = $$(".slide", box), cur = 0;
+  function startSlides() {
+    host.classList.remove("has-video"); reel.mode = "slides";
+    if (els.length < 2 || RM) return;
+    reel.timer = setInterval(function () {
+      els[cur].classList.remove("on"); cur = (cur + 1) % els.length;
+      var s = els[cur]; s.style.animation = "none"; void s.offsetWidth; s.style.animation = ""; s.classList.add("on");
+    }, 7000);
+  }
+  startSlides();
+  if (src && !RM && !SAVE) {
+    var tried = 0;
+    v.onloadeddata = function () { host.classList.add("has-video"); reel.mode = "video"; clearInterval(reel.timer); var p = v.play(); if (p && p.catch) p.catch(function () {}); };
+    v.onerror = function () {
+      if (tried++ === 0 && !/^https?:/i.test(src)) { v.src = A.rawUrl(src); v.load(); }
+      else { host.classList.remove("has-video"); startSlides(); }
+    };
+    if (poster) v.poster = A.sitePath(poster);
+    v.src = A.sitePath(src); v.load();
+  } else { v.removeAttribute("src"); v.load(); }
+}
+document.addEventListener("visibilitychange", function () {
+  var v = $("#rv"); if (!v || reel.mode !== "video") return;
+  if (document.hidden) v.pause(); else { var p = v.play(); if (p && p.catch) p.catch(function () {}); }
 });
 
+/* look: film grain strength */
+function applyLook() {
+  var g = { off: 0, low: 0.09, medium: 0.16, high: 0.26 }[String(setting("grain", "medium"))];
+  document.documentElement.style.setProperty("--grain", String(g == null ? 0.16 : g));
+  document.documentElement.classList.toggle("no-grain", g === 0);
+}
+
+/* ============================================================
+   THE SHELL: menu, toast, reveal-on-scroll
+   ============================================================ */
+function buildShell() {
+  var links = NAV.map(function (n) { return '<a href="#/' + n.id + '" data-nav="' + n.id + '">' + esc(setting(n.key, n.label)) + "</a>"; }).join("");
+  $("#nav").innerHTML = links;
+  $("#menu-nav").innerHTML = links;
+  applyLook();
+}
+function navActive(id) { $$("#nav a, #menu-nav a").forEach(function (a) { a.setAttribute("aria-current", a.dataset.nav === id ? "page" : "false"); }); }
+var tt;
+function toast(m) { var t = $("#toast"); t.textContent = m; t.classList.add("on"); clearTimeout(tt); tt = setTimeout(function () { t.classList.remove("on"); }, 2400); }
+
+var io = null;
+function reveal(root) {
+  var els = $$(".rv:not(.in)", root || document), vh = window.innerHeight;
+  if (!("IntersectionObserver" in window) || RM) { els.forEach(function (e) { e.classList.add("in", "now"); }); return; }
+  if (!io) io = new IntersectionObserver(function (en) { en.forEach(function (x) { if (x.isIntersecting) { x.target.classList.add("in"); io.unobserve(x.target); } }); }, { rootMargin: "0px 0px -6% 0px", threshold: 0.05 });
+  els.forEach(function (e) { if (e.getBoundingClientRect().top < vh * 0.98) e.classList.add("in", "now"); else io.observe(e); });
+}
+
+/* ============================================================
+   ROUTER + FILM-THEMED PAGE CHANGES
+   ============================================================ */
+function parseHash() {
+  var h = location.hash.replace(/^#\/?/, ""), qi = h.indexOf("?");
+  var path = qi < 0 ? h : h.slice(0, qi), q = new URLSearchParams(qi < 0 ? "" : h.slice(qi + 1));
+  var segs = path.split("/").filter(Boolean).map(function (s) { try { return decodeURIComponent(s); } catch (e) { return s; } });
+  return { page: segs[0] || "", arg: segs.slice(1).join("/"), q: q, raw: h };
+}
+function build(r) {
+  switch (r.page) {
+    case "": case "home": return pHome();
+    case "films": return pFilms();
+    case "film": return pFilm(r.arg);
+    case "photography": return pPhotography(r.q);
+    case "photo": return pPhoto(r.arg);
+    case "news": return r.arg ? pArticle(r.arg) : pNews();
+    case "hello": case "about": case "contact": return pHello();
+    case "downloads": ps.free = true; return pPhotography(new URLSearchParams("free=1"));
+    default: return pHome();
+  }
+}
+function depth(def) { var i = 0; NAV.forEach(function (n, k) { if (n.id === def.nav) i = k; }); return i * 10 + (/^(film|photo|article)$/.test(def.key) ? 1 : 0); }
+
+var cur = { key: "", def: null }, state = { last: "", i: -1 }, running = null, click = null, touched = false;
+
+function swap(def, o) {
+  o = o || {};
+  var page = $("#page");
+  document.body.dataset.page = def.key;
+  page.className = "page" + (def.dark ? " dark" : "");
+  page.innerHTML = def.html + footerHtml();
+  document.title = (def.title ? def.title + " · " : "") + setting("brand_title", "Astris Productions");
+  $("#sr").textContent = def.title || "Home";
+  navActive(def.nav);
+  closeLb(); document.body.classList.remove("menu");
+  if (!o.keepScroll) window.scrollTo(0, 0);
+  reveal(page);
+  if (def.bind) def.bind(page);
+  var rp = $("[data-replay]", page); if (rp) rp.onclick = function () { runIntro(true); };
+  cur.def = def;
+}
+
+/* the old page, as a still copy sitting on top of its own snapshot of the reel */
+function makeGhost(page, sy) {
+  var g = document.createElement("div");
+  g.className = "layer ghost"; g.setAttribute("aria-hidden", "true"); g.setAttribute("inert", "");
+  g.style.width = page.getBoundingClientRect().width + "px";
+  var back = document.createElement("div"); back.className = "ghost-reel";
+  var v = $("#rv");
+  if (reel.mode === "video" && v && v.readyState >= 2 && v.videoWidth) {
+    try {
+      var cv = document.createElement("canvas"), w = Math.min(960, window.innerWidth), h = Math.round(w * window.innerHeight / window.innerWidth);
+      cv.width = w; cv.height = h;
+      var s = Math.max(w / v.videoWidth, h / v.videoHeight), dw = v.videoWidth * s, dh = v.videoHeight * s;
+      cv.getContext("2d").drawImage(v, (w - dw) / 2, (h - dh) / 2, dw, dh);
+      back.appendChild(cv);
+    } catch (e) { /* keep the plain dark backing */ }
+  } else {
+    var on = $(".slide.on img"); if (on) back.appendChild(on.cloneNode());
+  }
+  var sc = $("#scrim"); if (sc) back.appendChild(sc.cloneNode());
+  g.appendChild(back);
+  var inner = document.createElement("div"); inner.className = "ghost-in"; inner.style.transform = "translateY(" + (-sy) + "px)";
+  var copy = page.cloneNode(true); copy.removeAttribute("id");
+  $$("[id]", copy).forEach(function (n) { n.removeAttribute("id"); });
+  inner.appendChild(copy); g.appendChild(inner);
+  document.body.appendChild(g);
+  return g;
+}
+
+function cfg() {
+  return { mode: String(setting("transition_mode", "random")), single: String(setting("transition_single", "dissolve")), enabled: listify(D.site.transitions_enabled) };
+}
+function go(def, key) {
+  var page = $("#page");
+  if (running) { running.cancel(); running = null; }
+  var origin = click && Date.now() - click.t < 1500 ? click : null;
+  var id = (RM || !page.firstChild || !cur.def) ? null : TR.pick(cfg(), state, !!(origin && origin.rect));
+  if (!id) { swap(def); return; }
+  var sy = window.scrollY || 0, dir = cur.def && depth(def) < depth(cur.def) ? -1 : 1;
+  var ghost = makeGhost(page, sy);
+  swap(def);
+  window.scrollTo(0, 0);
+  page.classList.add("xing");
+  document.body.classList.add("moving");
+  var fx = $("#fx");
+  var p = TR.play(id, {
+    stage: fx, host: fx, from: ghost, to: page, base: 10, pos: "absolute", dir: dir,
+    speed: SPEED[String(setting("transition_speed", "normal"))] || 1, origin: origin
+  });
+  running = p;
+  function end() { if (running === p) running = null; ghost.remove(); page.classList.remove("xing"); document.body.classList.remove("moving"); window.scrollTo(0, 0); try { page.focus({ preventScroll: true }); } catch (e) {} }
+  var cancel = p.cancel; p.cancel = function () { cancel(); end(); };
+  p.then(end);
+}
+
+function show(initial) {
+  if (!D.ready) return;
+  var r = parseHash(), def = build(r);
+  var key = def.key + "/" + (r.arg || "");
+  if (initial) { swap(def); cur.key = key; return; }
+  if (key === cur.key) { return; }
+  touched = true;
+  cur.key = key;
+  go(def, key);
+}
+
+/* remember what was clicked, so the page change can start from it (going into a card) */
+document.addEventListener("click", function (e) {
+  var a = e.target.closest && e.target.closest("a[href^='#']");
+  if (!a || e.defaultPrevented || e.metaKey || e.ctrlKey || e.shiftKey || e.button) return;
+  var c = { t: Date.now(), x: e.clientX, y: e.clientY };
+  if (a.hasAttribute("data-dive")) {
+    var sel = a.getAttribute("data-dive"), im = sel ? $(sel) : $("img", a);
+    if (im && im.complete && im.naturalWidth) { var r = im.getBoundingClientRect(); c.rect = { left: r.left, top: r.top, width: r.width, height: r.height }; c.src = im.currentSrc || im.src; }
+  }
+  click = c;
+}, true);
+window.addEventListener("hashchange", function () { show(false); });
+window.addEventListener("scroll", function () { if (window.scrollY > 90) touched = true; }, { passive: true });
+
+/* ============================================================
+   THE OPENING + BOOT
+   ============================================================ */
+var introCtl = null;
+function seen() { try { return sessionStorage.getItem("astris-intro") === "1"; } catch (e) { return false; } }
+function runIntro(force) {
+  if (RM || !INTRO) return;
+  if (!force && (seen() || !flag("intro_enabled", true))) return;
+  try { sessionStorage.setItem("astris-intro", "1"); } catch (e) { /* ignore */ }
+  var items = pickItems("intro_items", 8).slice(0, 10);
+  var urls = items.map(function (it, i) { return imgUrl(it.img, i === 0 ? 1280 : 640); });
+  if (introCtl) return;
+  window.scrollTo(0, 0);
+  document.body.classList.add("preintro");
+  introCtl = INTRO.play({
+    frames: urls, speed: String(setting("intro_speed", "normal")), wait: INTRO.preload(urls, 800),
+    onArrive: function () { document.body.classList.remove("preintro"); document.body.classList.add("arrive"); setTimeout(function () { document.body.classList.remove("arrive"); }, 900); },
+    onDone: function () { introCtl = null; document.body.classList.remove("preintro"); }
+  });
+}
+
+function onData(initial) {
+  buildShell(); setupReel();
+  if (initial) { show(true); return; }
+  /* newer content arrived: refresh quietly, but never under someone who is already looking around */
+  if (!touched && !running && $("#lb").hidden) { var r = parseHash(), def = build(r); swap(def, { keepScroll: true }); }
+}
+
+function boot() {
+  var bootEl = $("#boot");
+  if (bootEl && BRAND) bootEl.innerHTML = '<svg viewBox="0 0 1900 1600" aria-hidden="true"><path d="' + BRAND.stripOuter + '" fill="none" stroke="#f2b705" stroke-width="12"/></svg>';
+  var wantIntro = !RM && !seen() && /^(#\/?)?(home)?$/.test(location.hash);
+  lbBind();
+  $("#burger").onclick = function () { document.body.classList.add("menu"); $(".menu-x").focus(); };
+  $("#menu").addEventListener("click", function (e) { if (e.target.closest("a, .menu-x") || e.target === this) document.body.classList.remove("menu"); });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") { closeLb(); document.body.classList.remove("menu"); }
+    if (!$("#lb").hidden) { if (e.key === "ArrowRight") showLb(lb.i + 1); if (e.key === "ArrowLeft") showLb(lb.i - 1); }
+  });
+  A.load(function () { onData(false); }).then(function () {
+    onData(true);
+    if (bootEl) { bootEl.classList.add("gone"); setTimeout(function () { bootEl.remove(); }, 400); }
+    if (wantIntro) runIntro(false);
+  }, function () {
+    if (bootEl) bootEl.innerHTML = '<p class="boot-err">Couldn’t load the site just now. Please refresh in a moment.</p>';
+  });
+}
+boot();
 })();

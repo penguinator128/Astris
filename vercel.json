@@ -1,0 +1,24 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "buildCommand": "node scripts/build-public.mjs",
+  "outputDirectory": "dist",
+  "images": {
+    "sizes": [256, 480, 640, 960, 1280, 1600, 2048],
+    "localPatterns": [{ "pathname": "^/images/.*$", "search": "" }],
+    "minimumCacheTTL": 31536000,
+    "qualities": [75],
+    "formats": ["image/webp"]
+  },
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
+      ]
+    },
+    { "source": "/images/(.*)", "headers": [{ "key": "Cache-Control", "value": "public, max-age=604800" }] },
+    { "source": "/content-snapshot.json", "headers": [{ "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }] }
+  ]
+}

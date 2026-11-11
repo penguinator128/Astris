@@ -2,43 +2,62 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Astris — Photography & Film</title>
-<meta name="description" content="Astris — the photography and filmmaking portfolio of Josh Brogan.">
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23e8c547' stroke-width='1.5'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 3v4M12 17v4M3 12h4M17 12h4'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="./styles.css">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Astris Productions</title>
+<meta name="description" content="Astris Productions: films and photography by Josh.">
+<meta name="theme-color" content="#0b0a09">
+<meta property="og:title" content="Astris Productions">
+<meta property="og:description" content="Films and photography by Josh.">
+<meta property="og:image" content="/assets/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@200;300;400;500;600;700&display=swap">
+<link rel="stylesheet" href="/styles.css">
 </head>
-<body>
+<body data-page="">
+<a class="skip-link" href="#page">Skip to content</a>
 
-<header class="site-header">
-  <a class="brand" href="#/">
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"></circle><path d="M12 3v4M12 17v4M3 12h4M17 12h4"></path></svg>
-    <span>ASTRIS</span>
-  </a>
-  <nav class="site-nav" id="navLinks" aria-label="Primary"></nav>
-  <button class="nav-toggle" id="navToggle" aria-label="Open menu">
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 7h16M4 12h16M4 17h16"></path></svg>
-  </button>
-</header>
-
-<div class="mobile-menu" id="mobileMenu">
-  <button class="close-btn" id="navClose" aria-label="Close menu">
-    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M18 6L6 18M6 6l12 12"></path></svg>
-  </button>
-  <nav id="mobileLinks" style="display:flex;flex-direction:column;align-items:center;gap:6px"></nav>
+<div id="reel" aria-hidden="true">
+  <video id="rv" muted loop playsinline autoplay preload="auto"></video>
+  <div class="slides" id="slides"></div>
+  <div id="scrim"></div>
 </div>
 
-<main id="app"></main>
-
-<footer class="site-footer">
-  <a class="brand" href="#/">
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"></circle><path d="M12 3v4M12 17v4M3 12h4M17 12h4"></path></svg>
-    <span>ASTRIS</span>
+<header id="rail">
+  <a class="logo-link" href="#/" aria-label="Astris, home">
+    <svg class="logo" viewBox="0 0 1900 1600" aria-hidden="true"><path id="logo-path" fill="currentColor" fill-rule="evenodd" d=""/></svg><b class="a">ASTRIS</b>
   </a>
-  <nav id="footerLinks" aria-label="Footer"></nav>
-  <span class="footer-note" id="footerNote"></span>
-</footer>
+  <nav id="nav" aria-label="Main"></nav>
+  <button id="burger" type="button" aria-label="Open menu"><i></i><i></i></button>
+</header>
 
-<script src="./app.js"></script>
+<div id="menu" role="dialog" aria-label="Menu">
+  <button class="menu-x" type="button" aria-label="Close menu">&#10005;</button>
+  <nav id="menu-nav" aria-label="Menu"></nav>
+</div>
+
+<main id="page" class="page" tabindex="-1"></main>
+<div id="fx" aria-hidden="true"></div>
+<div id="lb" role="dialog" aria-modal="true" aria-label="Photo viewer" hidden></div>
+<div id="toast" role="status" aria-live="polite"></div>
+<div id="sr" class="sr" aria-live="polite"></div>
+<div id="grain" aria-hidden="true"></div>
+<div id="boot" aria-hidden="true"></div>
+
+<noscript><p style="position:fixed;inset:0;z-index:300;display:grid;place-items:center;background:#0b0a09;color:#f2ebdd;font:16px system-ui;padding:24px;text-align:center">Astris Productions needs JavaScript to show the films and photos. Email astris.a.productions@gmail.com or find Astris Productions on YouTube.</p></noscript>
+
+<script src="/assets/brand.js"></script>
+<script src="/assets/transitions.js"></script>
+<script src="/assets/intro.js"></script>
+<script src="/assets/data.js"></script>
+<script>document.getElementById("logo-path").setAttribute("d", window.ASTRIS_BRAND.logo);</script>
+<script src="/app.js"></script>
 </body>
 </html>
