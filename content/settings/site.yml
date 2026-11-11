@@ -18,7 +18,7 @@ home_films_order: 1
 home_latest_films_heading: Latest films
 home_latest_films_kicker: Motion
 home_latest_films_link: All films
-home_selected_enabled: false
+home_selected_enabled: true
 home_selected_order: 3
 home_selected_heading: Selected work
 home_selected_kicker: Curated
