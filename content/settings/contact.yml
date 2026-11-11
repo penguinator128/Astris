@@ -1,12 +1,10 @@
 kicker: Contact
-heading: "Say hello"
+heading: Say hello
 intro: "Got a project in mind, or just want to say hi? Send an email."
 email: "astris.a.productions@gmail.com"
 email_note: Replies usually within two days.
 location: Canberra
 availability: ""
 socials:
-  - label: Instagram
-    url: ""
   - label: YouTube
     url: "https://www.youtube.com/@AstrisProductions128"
