@@ -1654,11 +1654,12 @@ const INTRO_FIELDS = [
   { k: "intro_enabled", label: "Play the opening", type: "bool", help: "Plays once each visit. Visitors can skip it with a click." },
   { k: "intro_speed", label: "Opening speed", type: "select", options: [["fast", "Fast (under a second)"], ["normal", "Normal (about a second)"], ["relaxed", "Relaxed (a second and a half)"]] },
   { k: "reel_speed", label: "Footer reel speed", type: "select", options: [["slow", "Slow"], ["normal", "Normal"], ["fast", "Fast"]] },
-  { k: "grain", label: "Film grain", type: "select", options: [["off", "Off"], ["low", "Light"], ["medium", "Medium"], ["high", "Heavy"]] }
+  { k: "grain", label: "Film grain", type: "select", options: [["off", "Off"], ["low", "Light"], ["medium", "Medium"], ["high", "Heavy"]] },
+  { k: "reel_bands", label: "Film reel strips on pages", type: "bool", help: "The rolling strips of film on the home page and on the Films and Photography pages." }
 ];
 function vShow(v) {
   const site = S.site;
-  const vals = { intro_enabled: true, intro_speed: "normal", reel_speed: "normal", grain: "medium", ...site };
+  const vals = { intro_enabled: true, intro_speed: "normal", reel_speed: "normal", grain: "medium", reel_bands: true, ...site };
   const introSel = arr(site.intro_items).slice(), reelSel = arr(site.reel_items).slice();
   v.innerHTML = `
     <div class="pagehead">
@@ -1679,7 +1680,7 @@ function vShow(v) {
       ${chooserHTML("intro")}
     </div>
     <div class="panel"><h2>Footer reel</h2>
-      <div class="formgrid" id="reelForm">${fieldHTML(INTRO_FIELDS[2], vals.reel_speed)}</div>
+      <div class="formgrid" id="reelForm">${fieldHTML(INTRO_FIELDS[2], vals.reel_speed)}${fieldHTML(INTRO_FIELDS[4], vals.reel_bands)}</div>
       <p class="hint" style="margin-top:12px">The film reel that rolls along the bottom of every page. Choose what appears on it, or leave it on automatic.</p>
       ${chooserHTML("reel")}
     </div>
@@ -1699,7 +1700,7 @@ function vShow(v) {
       const vals2 = await stagePickers(form, readFields(form, SHOW_FIELDS, {}), changes);
       Object.assign(S.site, vals2,
         readFields($("#introForm", v), INTRO_FIELDS.slice(0, 2), {}),
-        readFields($("#reelForm", v), [INTRO_FIELDS[2]], {}),
+        readFields($("#reelForm", v), [INTRO_FIELDS[2], INTRO_FIELDS[4]], {}),
         readFields($("#grainForm", v), [INTRO_FIELDS[3]], {}),
         { intro_items: introSel, reel_items: reelSel });
       changes.push({ path: PATHS.site, content: objToYAML(S.site) });

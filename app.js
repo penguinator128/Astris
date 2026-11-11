@@ -67,6 +67,36 @@ function pickItems(key, n) {
 /* ============================================================
    THE FOOTER (on every page), with the film reel rolling at the very bottom
    ============================================================ */
+/* a rolling strip of film frames, used in the footer, on the home page, on some pages and in the menu */
+function ribbonHtml(o) {
+  o = o || {};
+  var items = o.items && o.items.length ? o.items : pickItems("reel_items", 14), half = items.slice();
+  while (half.length && half.length < (o.min || 14)) half = half.concat(items);
+  if (!half.length) return "";
+  var frames = half.map(function (it) {
+    return '<a class="fr" href="' + esc(it.href) + '" tabindex="-1" draggable="false">' + img(it.img, o.w || 480, it.title, "fri") + "<span>" + esc(it.title) + "</span></a>";
+  }).join("");
+  var mult = { slow: 1.5, normal: 1, fast: 0.65 }[setting("reel_speed", "normal")] || 1;
+  var dur = Math.round(Math.max(50, half.length * (o.per || 6)) * mult);
+  return '<div class="ribbon' + (o.cls ? " " + o.cls : "") + '" aria-hidden="true"><div class="track" style="--dur:' + dur + 's">' + frames + frames + "</div></div>";
+}
+function bandItems(kind) {
+  var all = allItems(), pick;
+  if (kind === "film") {   /* frames from your films: each thumbnail and every still */
+    pick = [];
+    D.films.forEach(function (f) { unique([f.thumb].concat(f.gallery)).forEach(function (u) { pick.push({ key: "film/" + f.slug, kind: "Film", title: f.title, href: "#/film/" + f.slug, img: u, date: f.date }); }); });
+  } else pick = all.filter(function (x) { return kind === "photo" ? x.kind === "Photo" : true; });
+  if (pick.length < 4) pick = all;
+  return pick.sort(function (a, b) { return (b.date || 0) - (a.date || 0); }).slice(0, 16);
+}
+/* the bigger rolling strips; switch them off in the Studio (Showreel & intro) */
+function bandHtml(kind, big) {
+  if (!flag("reel_bands", true)) return "";
+  var items = bandItems(kind);
+  if (items.length < 3) return "";
+  return ribbonHtml({ cls: big ? "big band" : "mid", w: big ? 640 : 480, items: items, per: big ? 8 : 7 });
+}
+
 function footerHtml() {
   var brand = esc(setting("brand", "ASTRIS"));
   var base = esc(setting("footer_text", "© " + new Date().getFullYear() + " Astris Productions"));
@@ -76,13 +106,6 @@ function footerHtml() {
     var h = handleOf(s.url);
     return '<a href="' + esc(s.url) + '" target="_blank" rel="noopener">' + esc(s.label) + (h ? "<small>" + esc(h) + "</small>" : "") + "</a>";
   }).join("");
-  var items = pickItems("reel_items", 14), half = items.slice();
-  while (half.length && half.length < 14) half = half.concat(items);
-  var frames = half.map(function (it) {
-    return '<a class="fr" href="' + esc(it.href) + '" tabindex="-1" draggable="false">' + img(it.img, 480, it.title, "fri") + "<span>" + esc(it.title) + "</span></a>";
-  }).join("");
-  var mult = { slow: 1.5, normal: 1, fast: 0.65 }[setting("reel_speed", "normal")] || 1;
-  var dur = Math.round(Math.max(50, half.length * 6) * mult);
   return '<footer class="foot"><div class="foot-in">' +
     '<div class="fbrand"><svg class="logo" viewBox="0 0 1900 1600" role="img" aria-label="' + brand + '"><path fill="currentColor" fill-rule="evenodd" d="' + BRAND.logo + '"/></svg>' +
     '<div><b class="a">ASTRIS<br>PRODUCTIONS</b><p>' + esc(setting("tagline", "Photography & Film")) + "</p></div></div>" +
@@ -90,7 +113,7 @@ function footerHtml() {
     '<div class="fcol"><h4>Follow</h4>' + soc + "</div>" +
     '<div class="fcol"><h4>Contact</h4><a href="mailto:' + esc(email()) + '">' + esc(email()) + "</a>" + (D.contact.location ? "<p>" + esc(D.contact.location) + "</p>" : "") + "</div></div>" +
     '<div class="fbase"><span>' + base + "</span><span>" + who + (note ? " &middot; " + esc(note) : "") + '</span><button type="button" data-replay>Replay intro</button></div>' +
-    (frames ? '<div class="ribbon" aria-hidden="true"><div class="track" style="--dur:' + dur + 's">' + frames + frames + "</div></div>" : "") +
+    ribbonHtml() +
     "</footer>";
 }
 
@@ -98,7 +121,7 @@ function footerHtml() {
    PAGES. Each returns { key, nav, title, dark, html, bind(root) }
    ============================================================ */
 function pageHead(title, intro) {
-  return '<header class="ph"><h1 class="a">' + dot(title) + "</h1>" + (intro ? "<p>" + esc(intro) + "</p>" : "") + "</header>";
+  return '<header class="ph"><h1 class="a">' + dot(title) + "</h1>" + (intro ? "<p>" + esc(intro) + "</p>" : "") + '</header><div class="perf" aria-hidden="true"></div>';
 }
 function empty(msg, link) {
   return '<div class="empty rv"><p>' + esc(msg) + "</p>" + (link || "") + "</div>";
@@ -137,7 +160,7 @@ function progressBar(f) {
 }
 function filmCard(f) {
   var meta = [f.type, f.year, f.length].filter(Boolean).join(" · ");
-  return '<a class="card rv" data-dive href="#/film/' + esc(f.slug) + '"><div class="im">' +
+  return '<a class="card film rv" data-dive href="#/film/' + esc(f.slug) + '"><div class="im">' +
     (f.thumb ? img(f.thumb, 960, f.title, "ci") : '<span class="noim"></span>') +
     (f.wip ? '<span class="tag">In progress</span>' : "") + "</div><h3 class=\"a\">" + esc(f.title) + "</h3>" +
     (f.wip ? progressBar(f) : (meta ? '<p class="meta">' + esc(meta) + "</p>" : "")) + "</a>";
@@ -150,7 +173,7 @@ function newsRow(n) {
 }
 function section(prefix, title, linkLabel, href, body, lead) {
   var heading = setting(prefix + "_heading", title);
-  return '<section class="blk"><div class="blk-in"><div class="blk-h rv"><h2 class="a">' + dot(heading) + "</h2>" +
+  return '<section class="blk"><div class="blk-in"><div class="perf rv" aria-hidden="true"></div><div class="blk-h rv"><h2 class="a">' + dot(heading) + "</h2>" +
     (href ? '<a class="link" href="' + href + '">' + esc(setting(prefix + "_link", linkLabel)) + " &rarr;</a>" : "") + "</div>" +
     (lead ? '<p class="lead rv">' + esc(lead) + "</p>" : "") + body + "</div></section>";
 }
@@ -174,7 +197,7 @@ function pHome() {
     '<p><a class="btn y" href="#/hello">Say hello <span aria-hidden="true">&rarr;</span></a></p></div></div></section>');
   add("news", true, 5, D.news.length ? section("home_news", "News", "All news", "#/news", D.news.slice(0, 3).map(newsRow).join("")) : "");
   secs.sort(function (a, b) { return a.order - b.order; });
-  return { key: "home", nav: "", title: "", dark: false, html: hero + secs.map(function (s) { return s.html; }).join("") };
+  return { key: "home", nav: "", title: "", dark: false, html: hero + bandHtml("all", true) + secs.map(function (s) { return s.html; }).join("") };
 }
 
 /* ---- films ---- */
@@ -182,6 +205,7 @@ var fs = { show: "all", type: "", sort: "new" };
 function pFilms() {
   var types = unique(D.films.map(function (f) { return f.type; }));
   var html = pageHead(setting("films_heading", "Films"), setting("films_intro", "Finished films and the ones still being made, all in one place.")) +
+    (D.films.length ? bandHtml("film") : "") +
     (D.films.length ? '<div class="bar rv">' + tabs("show", [["all", "All"], ["done", "Finished"], ["wip", "In progress"]], fs.show) +
       '<div class="bar-r">' + (types.length > 1 ? select("ftype", "Type", [["", "All types"]].concat(types.map(function (t) { return [t, t]; })), fs.type) : "") +
       select("fsort", "Sort", [["new", "Newest first"], ["old", "Oldest first"], ["az", "A to Z"]], fs.sort) + '<span class="count" id="fcount"></span></div></div><div class="grid g3" id="fout"></div>'
@@ -275,6 +299,7 @@ function pPhotography(q) {
   var cams = unique(D.photos.map(function (p) { return p.camera; })).sort();
   var anyFree = D.photos.some(function (p) { return p.download; });
   var html = pageHead(setting("photography_heading", "Photography"), setting("photography_intro", "Stills from the archive. Some are free to download.")) +
+    (D.photos.length ? bandHtml("photo") : "") +
     (D.photos.length ? '<div class="bar rv">' + (series.length ? tabs("series", [["", "All"]].concat(series.map(function (s) { return [s, s]; })), ps.series) : "") +
       '<div class="bar-r">' + (anyFree ? '<button type="button" class="tab sw" id="free" aria-pressed="' + ps.free + '">Free to download</button>' : "") +
       (tags.length ? select("ptag", "Tag", [["", "All tags"]].concat(tags.map(function (t) { return [t, "#" + t]; })), ps.tag) : "") +
@@ -546,8 +571,8 @@ document.addEventListener("visibilitychange", function () {
 
 /* look: film grain strength */
 function applyLook() {
-  var g = { off: 0, low: 0.09, medium: 0.16, high: 0.26 }[String(setting("grain", "medium"))];
-  document.documentElement.style.setProperty("--grain", String(g == null ? 0.16 : g));
+  var g = { off: 0, low: 0.11, medium: 0.2, high: 0.32 }[String(setting("grain", "medium"))];
+  document.documentElement.style.setProperty("--grain", String(g == null ? 0.2 : g));
   document.documentElement.classList.toggle("no-grain", g === 0);
 }
 
@@ -555,11 +580,24 @@ function applyLook() {
    THE SHELL: menu, toast, reveal-on-scroll
    ============================================================ */
 function buildShell() {
-  var links = NAV.map(function (n) { return '<a href="#/' + n.id + '" data-nav="' + n.id + '">' + esc(setting(n.key, n.label)) + "</a>"; }).join("");
-  $("#nav").innerHTML = links;
-  $("#menu-nav").innerHTML = links;
+  $("#nav").innerHTML = NAV.map(function (n) { return '<a href="#/' + n.id + '" data-nav="' + n.id + '">' + esc(setting(n.key, n.label)) + "</a>"; }).join("");
+  $("#menu-nav").innerHTML = NAV.map(function (n, i) {
+    return '<a href="#/' + n.id + '" data-nav="' + n.id + '" style="--i:' + i + '"><span class="n">' + pad(i + 1) + '</span><span class="t">' + esc(setting(n.key, n.label)) + "</span></a>";
+  }).join("");
+  $("#menu-info").innerHTML = '<p class="mi-tag">' + esc(setting("tagline", "Photography & Film")) + "</p>" +
+    '<a class="mi-mail" href="mailto:' + esc(email()) + '">' + esc(email()) + "</a>" +
+    socials().map(function (s) { var h = handleOf(s.url); return '<a class="mi-link" href="' + esc(s.url) + '" target="_blank" rel="noopener">' + esc(s.label) + (h ? "<small>" + esc(h) + "</small>" : "") + "</a>"; }).join("") +
+    (D.contact.location ? "<p>" + esc(D.contact.location) + "</p>" : "") + '<button type="button" class="mi-replay" data-replay>Replay intro</button>';
+  menuReel = false;
   applyLook();
 }
+var menuReel = false;
+function openMenu() {
+  if (!menuReel) { menuReel = true; $("#menu-reel").innerHTML = ribbonHtml({ cls: "menuband", w: 480, items: bandItems("all"), per: 5 }); }
+  document.body.classList.add("menu"); $("#burger").setAttribute("aria-expanded", "true");
+  setTimeout(function () { var x = $(".menu-x"); if (x) x.focus({ preventScroll: true }); }, 60);
+}
+function closeMenu() { document.body.classList.remove("menu"); var b = $("#burger"); if (b) b.setAttribute("aria-expanded", "false"); }
 function navActive(id) { $$("#nav a, #menu-nav a").forEach(function (a) { a.setAttribute("aria-current", a.dataset.nav === id ? "page" : "false"); }); }
 var tt;
 function toast(m) { var t = $("#toast"); t.textContent = m; t.classList.add("on"); clearTimeout(tt); tt = setTimeout(function () { t.classList.remove("on"); }, 2400); }
@@ -602,12 +640,12 @@ function swap(def, o) {
   o = o || {};
   var page = $("#page");
   document.body.dataset.page = def.key;
-  page.className = "page" + (def.dark ? " dark" : "");
+  page.className = "page" + (def.dark ? " dark" : "") + (def.key === "home" ? " fade" : "");
   page.innerHTML = def.html + footerHtml();
   document.title = (def.title ? def.title + " · " : "") + setting("brand_title", "Astris Productions");
   $("#sr").textContent = def.title || "Home";
   navActive(def.nav);
-  closeLb(); document.body.classList.remove("menu");
+  closeLb(); closeMenu();
   if (!o.keepScroll) window.scrollTo(0, 0);
   reveal(page);
   if (def.bind) def.bind(page);
@@ -692,7 +730,11 @@ document.addEventListener("click", function (e) {
   click = c;
 }, true);
 window.addEventListener("hashchange", function () { show(false); });
-window.addEventListener("scroll", function () { if (window.scrollY > 90) touched = true; }, { passive: true });
+window.addEventListener("scroll", function () {
+  if (window.scrollY > 90) touched = true;
+  /* at the very bottom the side menu fades out, so it never sits on top of the film reel */
+  document.body.classList.toggle("at-end", window.scrollY + window.innerHeight > document.documentElement.scrollHeight - 320);
+}, { passive: true });
 
 /* ============================================================
    THE OPENING + BOOT
@@ -727,10 +769,13 @@ function boot() {
   if (bootEl && BRAND) bootEl.innerHTML = '<svg viewBox="0 0 1900 1600" aria-hidden="true"><path d="' + BRAND.stripOuter + '" fill="none" stroke="#f2b705" stroke-width="12"/></svg>';
   var wantIntro = !RM && !seen() && /^(#\/?)?(home)?$/.test(location.hash);
   lbBind();
-  $("#burger").onclick = function () { document.body.classList.add("menu"); $(".menu-x").focus(); };
-  $("#menu").addEventListener("click", function (e) { if (e.target.closest("a, .menu-x") || e.target === this) document.body.classList.remove("menu"); });
+  $("#burger").onclick = openMenu;
+  $("#menu").addEventListener("click", function (e) {
+    if (e.target.closest("[data-replay]")) { closeMenu(); runIntro(true); return; }
+    if (e.target.closest("a, .menu-x") || e.target === this || e.target.classList.contains("menu-body")) closeMenu();
+  });
   document.addEventListener("keydown", function (e) {
-    if (e.key === "Escape") { closeLb(); document.body.classList.remove("menu"); }
+    if (e.key === "Escape") { closeLb(); closeMenu(); }
     if (!$("#lb").hidden) { if (e.key === "ArrowRight") showLb(lb.i + 1); if (e.key === "ArrowLeft") showLb(lb.i - 1); }
   });
   A.load(function () { onData(false); }).then(function () {

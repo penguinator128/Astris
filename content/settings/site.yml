@@ -68,3 +68,4 @@ transitions_enabled: [dissolve, iris, advance, whip, zoom, dive, rack, burn, gat
 transition_speed: normal
 grain: medium
 image_optimize: true
+reel_bands: true
