@@ -21,10 +21,13 @@ The Studio is **not** part of the public website. The public build copies only t
 - **Photography**: filter by series, tag, camera, free downloads; a big viewer; free full-size downloads.
 - **News**: posts with their own page and a photo gallery.
 - **Say hello**: your silhouette, your email (with a copy button) and your links.
-- A film reel rolls along the bottom of **every** page.
+- A film reel rolls along the bottom of **every** page, and more film strips roll across the home page and the Films and Photography pages
+  (switch them off in the Studio under Showreel & intro).
+- The hamburger (top right, on every screen size) opens a full-yellow menu with big links, your contact details and a rolling reel.
+- The home page keeps the showreel visible as you scroll and fades gradually into black.
 - A quick opening (the bar drops down the A, then straight in) plays once per visit. Click or press Esc to skip.
 - Twelve film-themed page transitions. You choose which ones are used (see the Studio).
-- Subtle film grain over everything.
+- Film grain over everything, strongest on the showreel itself (Off / Light / Medium / Heavy in the Studio).
 
 Old links keep working: `#/about`, `#/contact` and `#/downloads` still go to the right place.
 
