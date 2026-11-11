@@ -32,7 +32,7 @@ home_news_kicker: Journal
 home_news_link: All news
 photography_kicker: Photography
 photography_heading: Photography
-photography_intro: "Stills from the archive. Some are free to download."
+photography_intro: Stills from the archive. Some are free to download.
 films_kicker: Filmography
 films_heading: Films
 films_intro: "Finished films and the ones still being made, all in one place."
@@ -58,14 +58,23 @@ home_cta_link: "#/films"
 showreel: ""
 showreel_poster: ""
 intro_enabled: true
-intro_speed: normal
+intro_speed: fast
 intro_items: []
 reel_items: []
 reel_speed: normal
 transition_mode: random
 transition_single: dissolve
-transitions_enabled: [dissolve, iris, advance, whip, zoom, dive, rack, burn, gate]
+transitions_enabled:
+  - dissolve
+  - iris
+  - advance
+  - whip
+  - zoom
+  - dive
+  - rack
+  - burn
+  - gate
 transition_speed: normal
-grain: medium
+grain: "off"
 image_optimize: true
 reel_bands: true
