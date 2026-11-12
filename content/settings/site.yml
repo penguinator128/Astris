@@ -74,6 +74,6 @@ transitions_enabled:
   - rack
   - cut
 transition_speed: relaxed
-grain: "off"
+grain: low
 image_optimize: true
 reel_bands: true
