@@ -55,7 +55,7 @@ footer_name: Josh
 nav_hello: Say hello
 home_cta_label: Watch the films
 home_cta_link: "#/films"
-showreel: ""
+showreel: "/images/uploads/showreel.mp4"
 showreel_poster: ""
 intro_enabled: true
 intro_speed: normal
