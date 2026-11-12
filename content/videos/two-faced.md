@@ -22,6 +22,6 @@ gallery:
   - "/images/uploads/sequence-02-00-01-38-28910-still006.jpg"
   - "/images/uploads/sequence-02-00-02-45-24721-still004.jpg"
   - "/images/uploads/image-11-11-26-at-8-23-pm.jpg"
-featured: false
-featured_order: 999
+featured: true
+featured_order: 1
 ---
