@@ -6,7 +6,7 @@ description: ""
 story: ""
 series: []
 tags: []
-date: "2026-09-04T12:49:21.903Z"
+date: "2026-09-04T12:49:00.000Z"
 camera: ""
 lens: ""
 iso: ""
