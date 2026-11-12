@@ -1,8 +1,8 @@
 ---
-title: Two Faced
+title: Wakakiri
 video_url: ""
 video: ""
-thumbnail: "/images/uploads/image-12-11-2026-at-10-39-am-2.png"
+thumbnail: ""
 type: Music Video
 year: "2026"
 length: "4m 59s"
@@ -12,7 +12,7 @@ status: in-progress
 stage: Finishing
 progress: 99
 update: Coming dec 4
-update_date: "2026-11-11T23:52:27.173Z"
+update_date: "2026-11-11T23:52:00.000Z"
 role: "Director, Cinematogrpher, DOP, Editor"
 credits: ""
 gallery:
